@@ -4,7 +4,7 @@
 # Clean-room: every entry was written from the plain meaning of the English text using ordinary
 # Korean video-editing vocabulary (시퀀스, 타임라인, 트랙, 클립, 재생 헤드, 빈, 렌더, 내보내기…). No
 # proprietary localisation resource, string table or product UI was consulted or copied; add entries
-# the same way. Product and technology names (FilmCraft, ArtCraft, Lumetri, ProRes, LUFS…) keep their
+# the same way. Product and technology names (FilmCraft, Lumetri, ProRes, LUFS…) keep their
 # spelling. Hangul is drawn with an installed system font (Malgun Gothic, Apple SD Gothic Neo, Noto
 # Sans CJK KR…, see cjk.rs); native-speaker review welcome.
 
@@ -62,7 +62,6 @@
 	59.94 fps Drop-Frame	59.94 fps 드롭 프레임
 	59.94 fps Non Drop-Frame	59.94 fps 논드롭 프레임
 	A boxed label with a round pointer; move the label and the pointer follows.	둥근 포인터가 있는 상자 레이블. 레이블을 옮기면 포인터가 따라갑니다.
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	클린룸 방식의 순수 Rust 비선형 비디오 편집기. ArtCraft 제품군의 일부입니다.
 	A cut sequence with transitions, effects and music	전환, 효과, 음악이 포함된 편집 시퀀스
 	A file dialog is already open	파일 대화상자가 이미 열려 있습니다
 	A news-style line that crawls in from the right and leaves at the left.	오른쪽에서 흘러 들어와 왼쪽으로 사라지는 뉴스형 자막.
@@ -235,7 +234,6 @@
 	“{file}” already exists in “{folder}”. Do you want to replace it?	“{folder}”에 “{file}” 파일이 이미 있습니다. 바꿀까요?
 	Replace	바꾸기
 	Arrange	배치
-	ArtCraft Website	ArtCraft 웹사이트
 	ASC CDL	ASC CDL
 	Aspect	종횡비
 	Assembly	어셈블리
@@ -672,7 +670,6 @@
 	Comment	주석
 	Comments:	설명:
 	Commits	커밋
-	Community	커뮤니티
 	Company	회사
 	Comparison	비교
 	Comparison View	비교 보기
@@ -1167,11 +1164,8 @@
 	Film Roll	필름 롤
 	FilmCraft always composites in linear light	FilmCraft는 항상 선형 광원으로 합성합니다
 	FilmCraft Graphics Template	FilmCraft 그래픽 템플릿
-	FilmCraft Help…	FilmCraft 도움말…
 	FilmCraft hit an error	FilmCraft 오류 발생
 	FilmCraft keeps the rest of the RAM free for other applications.	FilmCraft는 나머지 RAM을 다른 앱용으로 비워 둡니다.
-	FilmCraft on getartcraft.com	getartcraft.com의 FilmCraft
-	FilmCraft on GitHub	GitHub의 FilmCraft
 	FilmCraft Project	FilmCraft 프로젝트
 	FilmCraft quit unexpectedly while “{name}” had unsaved changes.	“{name}”의 변경 사항을 저장하지 않은 채 FilmCraft가 비정상 종료되었습니다.
 	FilmCraft was closed while “{name}” had unsaved changes.	“{name}”의 변경 사항을 저장하지 않은 채 FilmCraft가 닫혔습니다.
@@ -1581,11 +1575,7 @@
 	Italian	이탈리아어
 	Japanese	일본어
 	JetBrains Mono	JetBrains Mono
-	Join the ArtCraft Discord	ArtCraft Discord 참여
-	Join the ArtCraft Discord (discord.gg/artcraft)	ArtCraft Discord 참여(discord.gg/artcraft)
-	Join the ArtCraft Discord…	ArtCraft Discord 참여…
 	Join Through Edits	통과 편집 결합
-	Join us on Discord	Discord 참여하기
 	JPEG	JPEG
 	JPEG Sequence	JPEG 시퀀스
 	just now	방금
@@ -2542,8 +2532,6 @@
 	Replace:	바꾸기:
 	Replaced {n} font uses	글꼴 사용 {n}곳 바꿈
 	Replicate	복제
-	Report an issue	문제 신고
-	Report an Issue…	문제 신고…
 	Reset	재설정
 	Reset All Parameters	모든 매개변수 재설정
 	Reset Duration	지속 시간 재설정
@@ -2944,7 +2932,6 @@
 	Sort Order	정렬 순서
 	Source	소스
 	Source channels the selected audio clips play:	선택한 오디오 클립이 재생할 소스 채널:
-	Source code on GitHub	GitHub 소스 코드
 	Source In/Out	소스 시작/끝
 	Source Play/Stop	소스 재생/정지
 	Source Point	소스 지점
@@ -3601,7 +3588,6 @@
 	MXF export writes integer PCM only	MXF 내보내기는 정수 PCM만 기록합니다
 	Saves this session's log and shows it in your file manager.	이 세션의 로그를 저장하고 파일 관리자에서 보여 줍니다.
 	Shows a report on this computer.	이 컴퓨터에 대한 보고서를 보여 줍니다.
-	Shows the version, community links and credits in a FilmCraft window.	FilmCraft 창에 버전, 커뮤니티 링크, 제작진을 보여 줍니다.
 	Couldn't open your web browser	웹 브라우저를 열 수 없습니다
 	Open this address in your browser yourself:	이 주소를 브라우저에서 직접 여세요:
 # View > Reset Interface Zoom (#2253).

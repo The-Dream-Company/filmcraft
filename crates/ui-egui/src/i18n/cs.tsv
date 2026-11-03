@@ -40,7 +40,6 @@
 	Apply Default Transitions to Selection	Použít výchozí přechody na výběr
 	Apply Video Transition	Použít videopřechod
 	Arrange	Uspořádat
-	ArtCraft Website	Web ArtCraft
 	Assembly	Sestavení
 	Attach Proxies…	Připojit proxy soubory…
 	Audio Channels…	Zvukové kanály…
@@ -133,9 +132,6 @@
 	File	Soubor
 	File…	Soubor…
 	Fill frame	Vyplnit snímek
-	FilmCraft Help…	Nápověda k FilmCraft…
-	FilmCraft on GitHub	FilmCraft na GitHubu
-	FilmCraft on getartcraft.com	FilmCraft na getartcraft.com
 	Find Next	Najít další
 	Find…	Najít…
 	Fit	Přizpůsobit
@@ -181,7 +177,6 @@
 	Insert Frame Hold Segment	Vložit segment se zmrazeným snímkem
 	Install Motion Graphics Template…	Nainstalovat šablonu pohyblivé grafiky…
 	Interpret Footage…	Interpretovat záběry…
-	Join the ArtCraft Discord…	Připojit se k Discordu ArtCraft…
 	Keyboard Shortcuts…	Klávesové zkratky…
 	Label	Štítek
 	Labels…	Štítky…
@@ -273,7 +268,6 @@
 	Render Selection	Vykreslit výběr
 	Replace Fonts in Projects…	Nahradit písma v projektech…
 	Replace With Clip	Nahradit klipem
-	Report an Issue…	Nahlásit problém…
 	Reset All Parameters	Obnovit všechny parametry
 	Reset Duration	Obnovit dobu trvání
 	Reset to Saved Layout	Obnovit uložené rozložení
@@ -374,7 +368,6 @@
 	Master volume: use the Audio Track Mixer	Celkovou hlasitost nastavte v mixážním pultu zvukových stop.
 	Search	Hledat
 	Quick Export	Rychlý export
-	Join the ArtCraft Discord (discord.gg/artcraft)	Připojit se k Discordu ArtCraft (discord.gg/artcraft)
 	Cancel	Zrušit
 	OK	Potvrdit
 	Interpret Footage	Interpretovat záběry
@@ -417,10 +410,6 @@
 	Delete Caption Track	Odstranit stopu titulků
 	Delete Empty Caption Tracks	Odstranit prázdné stopy titulků
 	Version {version}	Verze {version}
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	Nelineární videoeditor napsaný čistě v Rustu, vytvořený nezávislou implementací. Součást rodiny ArtCraft.
-	Join the ArtCraft Discord	Připojit se k Discordu ArtCraft
-	Source code on GitHub	Zdrojový kód na GitHubu
-	Report an issue	Nahlásit problém
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT OR Apache-2.0. Písma: Inter, Noto Serif a JetBrains Mono (SIL OFL 1.1).
 	just now	právě teď
 	{n} s ago	před {n} s
@@ -458,8 +447,6 @@
 	A cut sequence with transitions, effects and music	Sestříhaná sekvence s přechody, efekty a hudbou
 	Bars and Tone	Barevné pruhy a tón
 	SMPTE HD bars with 1 kHz reference tone	Pruhy SMPTE HD s referenčním tónem 1 kHz
-	Community	Komunita
-	Join us on Discord	Připojit se k nám na Discordu
 	OMF Export Settings	Nastavení exportu OMF
 	AAF Export Settings	Nastavení exportu AAF
 	OMF Title:	Název OMF:
@@ -3605,7 +3592,6 @@
 	Recent	Nedávné
 	Saves this session's log and shows it in your file manager.	Uloží protokol této relace a zobrazí jej ve správci souborů.
 	Shows a report on this computer.	Zobrazí zprávu o tomto počítači.
-	Shows the version, community links and credits in a FilmCraft window.	Zobrazí verzi, odkazy na komunitu a poděkování v okně FilmCraft.
 	no Korean font is installed on this system; the interface stays in English	v systému není nainstalováno korejské písmo; rozhraní zůstává v angličtině
 	Animate zoom, scrolling and menus	Animovat přibližování, posouvání a nabídky
 	No matching text.	Žádný odpovídající text.
@@ -3628,8 +3614,6 @@
 	Set Work Area Bar Out Point	Nastavit výstupní bod pruhu pracovní oblasti
 	Audio output failed: playing without sound (check Settings > Audio Hardware)	Zvukový výstup selhal: přehrávání bez zvuku (zkontrolujte Nastavení > Zvukový hardware)
 	Audio output is not responding: playing without sound (check Settings > Audio Hardware)	Zvukový výstup neodpovídá: přehrávání bez zvuku (zkontrolujte Nastavení > Zvukový hardware)
-	Check for Updates…	Zkontrolovat aktualizace…
 	Checking for updates…	Kontroluje se aktualizace…
 	Could not check for updates:\n{error}	Aktualizace se nepodařilo zkontrolovat:\n{error}
 	FilmCraft {version} is currently the newest version available.	FilmCraft {version} je nejnovější dostupná verze.
-	Looks for a newer FilmCraft release and offers to update.	Vyhledá novější vydání FilmCraftu a nabídne aktualizaci.

@@ -47,6 +47,7 @@ impl FilmcraftApp {
     }
 }
 
+#[allow(dead_code)] // Filmsquare: nothing asks for an update check in this build
 pub(crate) fn check(app: &mut FilmcraftApp) -> Result<Value, String> {
     #[cfg(not(target_arch = "wasm32"))]
     {

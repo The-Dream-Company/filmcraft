@@ -29,7 +29,6 @@
 	Apply Default Transitions to Selection	Применить переходы по умолчанию к выделению
 	Apply Video Transition	Применить видеопереход
 	Arrange	Упорядочить
-	ArtCraft Website	Веб-сайт ArtCraft
 	Assembly	Сборка
 	Attach Proxies…	Прикрепить прокси…
 	Audio Channels…	Аудиоканалы…
@@ -122,9 +121,6 @@
 	File	Файл
 	File…	Файл…
 	Fill frame	Заполнить кадр
-	FilmCraft Help…	Справка FilmCraft…
-	FilmCraft on GitHub	FilmCraft на GitHub
-	FilmCraft on getartcraft.com	FilmCraft на getartcraft.com
 	Find Next	Найти далее
 	Find…	Найти…
 	Fit	Вписать
@@ -168,7 +164,6 @@
 	Insert Frame Hold Segment	Вставить сегмент стоп-кадра
 	Install Motion Graphics Template…	Установить шаблон анимированной графики…
 	Interpret Footage…	Интерпретировать материал…
-	Join the ArtCraft Discord…	Присоединиться к Discord ArtCraft…
 	Keyboard Shortcuts…	Сочетания клавиш…
 	Label	Метка
 	Labels…	Метки…
@@ -262,7 +257,6 @@
 	Render Selection	Визуализировать выделение
 	Replace Fonts in Projects…	Заменить шрифты в проектах…
 	Replace With Clip	Заменить клипом
-	Report an Issue…	Сообщить о проблеме…
 	Reset All Parameters	Сбросить все параметры
 	Reset Duration	Сбросить длительность
 	Reset to Saved Layout	Сбросить к сохранённому макету
@@ -364,7 +358,6 @@
 	Master volume: use the Audio Track Mixer	Громкость мастера задаётся в микшере аудиодорожек
 	Search	Поиск
 	Quick Export	Быстрый экспорт
-	Join the ArtCraft Discord (discord.gg/artcraft)	Присоединиться к Discord ArtCraft (discord.gg/artcraft)
 	Cancel	Отмена
 	OK	ОК
 	Interpret Footage	Интерпретировать материал
@@ -407,10 +400,6 @@
 	Delete Caption Track	Удалить дорожку субтитров
 	Delete Empty Caption Tracks	Удалить пустые дорожки субтитров
 	Version {version}	Версия {version}
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	Нелинейный видеоредактор на чистом Rust, созданный по принципу чистой комнаты. Часть семейства ArtCraft.
-	Join the ArtCraft Discord	Присоединиться к Discord ArtCraft
-	Source code on GitHub	Исходный код на GitHub
-	Report an issue	Сообщить о проблеме
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT OR Apache-2.0. Шрифты: Inter, Noto Serif и JetBrains Mono (SIL OFL 1.1).
 	just now	только что
 	{n} s ago	{n} с назад
@@ -448,8 +437,6 @@
 	A cut sequence with transitions, effects and music	Смонтированная последовательность с переходами, эффектами и музыкой
 	Bars and Tone	Полосы и тон
 	SMPTE HD bars with 1 kHz reference tone	Полосы SMPTE HD с опорным тоном 1 кГц
-	Community	Сообщество
-	Join us on Discord	Присоединиться к нам в Discord
 	OMF Export Settings	Настройки экспорта OMF
 	AAF Export Settings	Настройки экспорта AAF
 	OMF Title:	Название OMF:
@@ -3592,7 +3579,6 @@
 	Opens in your web browser: {url}	Откроется в браузере: {url}
 	Saves this session's log and shows it in your file manager.	Сохраняет журнал этого сеанса и показывает его в файловом менеджере.
 	Shows a report on this computer.	Показывает отчёт о компьютере.
-	Shows the version, community links and credits in a FilmCraft window.	Показывает версию, ссылки сообщества и список участников в окне FilmCraft.
 	Couldn't open your web browser	Не удалось открыть браузер
 	Open this address in your browser yourself:	Этот адрес нужно открыть в браузере вручную:
 	Reset Interface Zoom	Сбросить масштаб интерфейса

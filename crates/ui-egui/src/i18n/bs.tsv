@@ -31,7 +31,6 @@
 	Apply Default Transitions to Selection	Primijeni zadane prijelaze na odabir
 	Apply Video Transition	Primijeni video prijelaz
 	Arrange	Rasporedi
-	ArtCraft Website	Web stranica ArtCrafta
 	Assembly	Sklapanje
 	Attach Proxies…	Priloži proksije…
 	Audio	Zvuk
@@ -127,9 +126,6 @@
 	File	Datoteka
 	File…	Datoteka…
 	Fill frame	Ispuni kadar
-	FilmCraft Help…	Pomoć za FilmCraft…
-	FilmCraft on GitHub	FilmCraft na GitHubu
-	FilmCraft on getartcraft.com	FilmCraft na getartcraft.com
 	Find Next	Pronađi sljedeće
 	Find…	Pronađi…
 	Fit	Uklopi
@@ -173,7 +169,6 @@
 	Insert Frame Hold Segment	Umetni segment zadržavanja sličice
 	Install Motion Graphics Template…	Instaliraj predložak animirane grafike…
 	Interpret Footage…	Interpretiraj snimak…
-	Join the ArtCraft Discord…	Pridružite se ArtCraft Discordu…
 	Keyboard Shortcuts…	Prečice na tastaturi…
 	Label	Oznaka
 	Labels…	Oznake…
@@ -264,7 +259,6 @@
 	Render Selection	Iscrtaj odabir
 	Replace Fonts in Projects…	Zamijeni fontove u projektima…
 	Replace With Clip	Zamijeni klipom
-	Report an Issue…	Prijavi problem…
 	Reset All Parameters	Vrati sve parametre na početno
 	Reset Duration	Vrati trajanje na početno
 	Reset to Saved Layout	Vrati na sačuvani raspored
@@ -394,7 +388,6 @@
 	Master volume: use the Audio Track Mixer	Glavna jačina: koristite mikser audio traka
 	Search	Pretraga
 	Quick Export	Brzi izvoz
-	Join the ArtCraft Discord (discord.gg/artcraft)	Pridružite se ArtCraft Discordu (discord.gg/artcraft)
 	Cancel	Otkaži
 	OK	U redu
 	Interpret Footage	Interpretiraj snimak
@@ -437,10 +430,6 @@
 	Delete Caption Track	Izbriši traku titlova
 	Delete Empty Caption Tracks	Izbriši prazne trake titlova
 	Version {version}	Verzija {version}
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	Nelinearni video uređivač u čistom Rustu, napisan od nule. Dio porodice ArtCraft.
-	Join the ArtCraft Discord	Pridružite se ArtCraft Discordu
-	Source code on GitHub	Izvorni kod na GitHubu
-	Report an issue	Prijavi problem
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT OR Apache-2.0. Fontovi: Inter, Noto Serif i JetBrains Mono (SIL OFL 1.1).
 	just now	upravo sada
 	{n} s ago	prije {n} s
@@ -478,8 +467,6 @@
 	A cut sequence with transitions, effects and music	Montirana sekvenca s prijelazima, efektima i muzikom
 	Bars and Tone	Trake i ton
 	SMPTE HD bars with 1 kHz reference tone	SMPTE HD trake s referentnim tonom 1 kHz
-	Community	Zajednica
-	Join us on Discord	Pridružite nam se na Discordu
 	OMF Export Settings	Postavke izvoza OMF
 	AAF Export Settings	Postavke izvoza AAF
 	OMF Title:	OMF naslov:
@@ -3594,7 +3581,6 @@
 	Opens in your web browser: {url}	Otvara se u vašem web pregledniku: {url}
 	Saves this session's log and shows it in your file manager.	Čuva zapisnik ove sesije i prikazuje ga u upravitelju datoteka.
 	Shows a report on this computer.	Prikazuje izvještaj o ovom računaru.
-	Shows the version, community links and credits in a FilmCraft window.	Prikazuje verziju, veze zajednice i zasluge u FilmCraft prozoru.
 	Couldn't open your web browser	Nije moguće otvoriti vaš web preglednik
 	Open this address in your browser yourself:	Sami otvorite ovu adresu u svom pregledniku:
 	The control server is disabled: FILMCRAFT_CONTROL_TOKEN must contain 64 random hex characters (see docs/control-protocol.md)	Kontrolni server je onemogućen: FILMCRAFT_CONTROL_TOKEN mora sadržavati 64 nasumična heksadecimalna znaka (pogledajte docs/control-protocol.md)

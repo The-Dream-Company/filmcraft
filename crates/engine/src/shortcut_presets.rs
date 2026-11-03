@@ -214,7 +214,6 @@ pub const PREMIERE: &[Entry] = &[
     ("graphics.leadingDown", "Alt+Down", ""),
     ("graphics.leadingUp5", "Alt+Shift+Up", ""),
     ("graphics.leadingDown5", "Alt+Shift+Down", ""),
-    ("help.filmcraftHelp", "F1", ""),
     ("app.quit", "Cmd+Q", ""),
     ("clip.setPosterFrame", "Cmd+P", ""),
     ("clip.clearPosterFrame", "Alt+P", ""),

@@ -24,7 +24,7 @@ pub(crate) fn craft_fonts() -> impl Iterator<Item = &'static filmcraft_text::fon
 }
 
 // Hangul: neither the UI fonts nor the Chinese/Japanese fallbacks have it, so typed, pasted and
-// IME-composed Korean drew as missing-glyph boxes (artcraft#2093).
+// IME-composed Korean drew as missing-glyph boxes.
 const KOREAN_SAMPLE: &str = "한국어입력테스트";
 const KOREAN_PREFERRED: &[&str] = &["Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans CJK KR", "Noto Sans KR", "Source Han Sans K", "NanumGothic"];
 

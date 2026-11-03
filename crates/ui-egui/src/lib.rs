@@ -39,7 +39,6 @@ macro_rules! tlf {
 }
 
 pub mod automation;
-pub mod brand;
 pub mod calc;
 pub mod capture;
 mod cjk;

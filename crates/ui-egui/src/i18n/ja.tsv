@@ -4,7 +4,7 @@
 # Clean-room: every entry was written from the plain meaning of the English text using ordinary
 # Japanese computing and video-editing vocabulary (クリップ, シーケンス, トラック, 再生ヘッド, ぼかし ...). No
 # proprietary localisation resource, string table or product UI was consulted or copied; add entries
-# the same way. Product and technology names (FilmCraft, ArtCraft, Lumetri, ProRes, LUFS ...) keep
+# the same way. Product and technology names (FilmCraft, Lumetri, ProRes, LUFS ...) keep
 # their spelling.
 #
 # House style, so new entries read like the rest:
@@ -17,7 +17,6 @@
 #   - "Horizontal"/"Vertical" are 水平/垂直 (guides, blur, axes); vertical text is "Vertical Text".
 
 	About FilmCraft	FilmCraft について
-	Check for Updates…	アップデートを確認…
 	Checking for updates…	アップデートを確認中…
 	Could not check for updates:\n{error}	アップデートを確認できませんでした:\n{error}
 	FilmCraft Updates	FilmCraft のアップデート
@@ -47,7 +46,6 @@
 	Apply Default Transitions to Selection	選択範囲に既定のトランジションを適用
 	Apply Video Transition	ビデオトランジションを適用
 	Arrange	重ね順
-	ArtCraft Website	ArtCraft の Web サイト
 	Assembly	アセンブリ
 	Attach Proxies…	プロキシを関連付け…
 	Audio Channels…	オーディオチャンネル…
@@ -144,9 +142,6 @@
 	File	ファイル
 	File…	ファイル…
 	Fill frame	フレームを埋める
-	FilmCraft Help…	FilmCraft ヘルプ…
-	FilmCraft on GitHub	GitHub の FilmCraft
-	FilmCraft on getartcraft.com	getartcraft.com の FilmCraft
 	Find Next	次を検索
 	Find…	検索…
 	Fit	合わせる
@@ -193,7 +188,6 @@
 	Insert Frame Hold Segment	フレームホールドセグメントを挿入
 	Install Motion Graphics Template…	モーショングラフィックステンプレートをインストール…
 	Interpret Footage…	素材を解釈…
-	Join the ArtCraft Discord…	ArtCraft の Discord に参加…
 	Keyboard Shortcuts…	キーボードショートカット…
 	Label	ラベル
 	Labels…	ラベル…
@@ -286,7 +280,6 @@
 	Render Selection	選択範囲をレンダリング
 	Replace Fonts in Projects…	プロジェクト内のフォントを置換…
 	Replace With Clip	クリップで置換
-	Report an Issue…	問題を報告…
 	Reset All Parameters	すべてのパラメーターをリセット
 	Reset Duration	長さをリセット
 	Reset to Saved Layout	保存したレイアウトにリセット
@@ -389,7 +382,6 @@
 	Master volume: use the Audio Track Mixer	マスター音量はオーディオトラックミキサーで調整してください
 	Search	検索
 	Quick Export	クイック書き出し
-	Join the ArtCraft Discord (discord.gg/artcraft)	ArtCraft の Discord に参加 (discord.gg/artcraft)
 	Cancel	キャンセル
 	OK	OK
 	Interpret Footage	素材を解釈
@@ -428,10 +420,6 @@
 	Delete Audio Tracks	オーディオトラックを削除する
 	All Empty Tracks	すべての空のトラック
 	Version {version}	バージョン {version}
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	Rust だけで書かれた、クリーンルーム設計のノンリニアビデオ編集ソフトです。ArtCraft ファミリーの一員です。
-	Join the ArtCraft Discord	ArtCraft の Discord に参加
-	Source code on GitHub	GitHub のソースコード
-	Report an issue	問題を報告
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT OR Apache-2.0。フォント: Inter、Noto Serif、JetBrains Mono (SIL OFL 1.1)。
 	just now	たった今
 	{n} s ago	{n} 秒前
@@ -472,8 +460,6 @@
 	A cut sequence with transitions, effects and music	トランジション、エフェクト、音楽を含む編集済みのシーケンス
 	Bars and Tone	カラーバーとトーン
 	SMPTE HD bars with 1 kHz reference tone	1 kHz 基準トーン付きの SMPTE HD カラーバー
-	Community	コミュニティ
-	Join us on Discord	Discord に参加
 	OMF Export Settings	OMF 書き出し設定
 	AAF Export Settings	AAF 書き出し設定
 	OMF Title:	OMF タイトル:
@@ -3630,8 +3616,6 @@
 	Delete this preset	このプリセットを削除
 	Saves this session's log and shows it in your file manager.	このセッションのログを保存し、ファイルマネージャーで表示します。
 	Shows a report on this computer.	このコンピューターのレポートを表示します。
-	Shows the version, community links and credits in a FilmCraft window.	バージョン、コミュニティへのリンク、クレジットを FilmCraft のウィンドウに表示します。
-	Looks for a newer FilmCraft release and offers to update.	FilmCraft の新しいリリースを確認し、アップデートを提案します。
 	Couldn't open your web browser	ウェブブラウザーを開けませんでした
 	Open this address in your browser yourself:	このアドレスをご自身でブラウザーで開いてください：
 # View > Reset Interface Zoom (#2253).

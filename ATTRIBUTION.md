@@ -1,5 +1,7 @@
 # Attribution
 
+This copy is a modified version of FilmCraft: the `docs/brand/` marks listed below were removed from it.
+
 Every non-code asset in FilmCraft, with its author, source and licence. Each file listed here also has
 a `<file>.attribution` sidecar with full details. The rules are in [AGENTS.md](AGENTS.md) §1: no Adobe
 iconography, images or other Adobe assets; open licences only; every asset attributed.

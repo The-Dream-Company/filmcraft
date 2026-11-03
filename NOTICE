@@ -3,6 +3,9 @@ Copyright (c) 2026 ArtCraft Team and the FilmCraft contributors.
 Licensed under the MIT License or the Apache License, Version 2.0, at your option
 (LICENSE-MIT, LICENSE-APACHE).
 
+This copy is a modified version of FilmCraft, kept by The Dream Company for Filmsquare; README.md
+says what changed. The ArtCraft marks were removed from it, as docs/brand/LICENSE-brand.txt requires.
+
 The ArtCraft name, wordmark and logos in docs/brand/ are trademarks of the ArtCraft Team. They are
 not open source and are not covered by the license above; their terms are in
 docs/brand/LICENSE-brand.txt.

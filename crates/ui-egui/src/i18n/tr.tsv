@@ -10,7 +10,7 @@
 # Turkish video-editing vocabulary (iz, oynatma kafası, sekans, klasör, düzenleme/kesim,
 # anahtar kare, dışa aktarma, işleme…). No proprietary localisation resource, string table or
 # product UI was consulted or copied; add entries the same way. Product and technology names
-# (FilmCraft, ArtCraft, Lumetri, ProRes, LUFS, H.264…) keep their spelling.
+# (FilmCraft, Lumetri, ProRes, LUFS, H.264…) keep their spelling.
 
 	About FilmCraft	FilmCraft Hakkında
 	Add Audio Submix Track	Ses Alt Miksaj İzi Ekle
@@ -38,7 +38,6 @@
 	Apply Default Transitions to Selection	Seçime Varsayılan Geçişleri Uygula
 	Apply Video Transition	Video Geçişi Uygula
 	Arrange	Sırala
-	ArtCraft Website	ArtCraft Web Sitesi
 	Assembly	Birleştirme
 	Attach Proxies…	Proxy'leri İliştir…
 	Audio Channels…	Ses Kanalları…
@@ -131,9 +130,6 @@
 	File	Dosya
 	File…	Dosya…
 	Fill frame	Kareyi doldur
-	FilmCraft Help…	FilmCraft Yardımı…
-	FilmCraft on GitHub	GitHub'da FilmCraft
-	FilmCraft on getartcraft.com	getartcraft.com'da FilmCraft
 	Find Next	Sonrakini Bul
 	Find…	Bul…
 	Fit	Sığdır
@@ -177,7 +173,6 @@
 	Insert Frame Hold Segment	Kare Dondurma Segmenti Ekle
 	Install Motion Graphics Template…	Hareketli Grafik Şablonu Yükle…
 	Interpret Footage…	Çekimi Yorumla…
-	Join the ArtCraft Discord…	ArtCraft Discord'una Katıl…
 	Keyboard Shortcuts…	Klavye Kısayolları…
 	Label	Etiket
 	Labels…	Etiketler…
@@ -271,7 +266,6 @@
 	Render Selection	Seçimi İşle
 	Replace Fonts in Projects…	Projelerdeki Yazı Tiplerini Değiştir…
 	Replace With Clip	Kliple Değiştir
-	Report an Issue…	Sorun Bildir…
 	Reset All Parameters	Tüm Parametreleri Sıfırla
 	Reset Duration	Süreyi Sıfırla
 	Reset to Saved Layout	Kayıtlı Düzene Sıfırla
@@ -372,7 +366,6 @@
 	Master volume: use the Audio Track Mixer	Ana ses düzeyi: Ses İzi Karıştırıcısı'nı kullanın
 	Search	Ara
 	Quick Export	Hızlı Dışa Aktar
-	Join the ArtCraft Discord (discord.gg/artcraft)	ArtCraft Discord'una Katılın (discord.gg/artcraft)
 	Cancel	İptal
 	OK	Tamam
 	Interpret Footage	Görüntüyü Yorumla
@@ -415,10 +408,6 @@
 	Delete Caption Track	Altyazı İzini Sil
 	Delete Empty Caption Tracks	Boş Altyazı İzlerini Sil
 	Version {version}	Sürüm {version}
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	Temiz oda prensibiyle geliştirilmiş, saf Rust doğrusal olmayan video düzenleyici. ArtCraft ailesinin bir parçası.
-	Join the ArtCraft Discord	ArtCraft Discord'una Katılın
-	Source code on GitHub	GitHub'daki kaynak kodu
-	Report an issue	Sorun bildir
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT VEYA Apache-2.0. Yazı Tipleri: Inter, Noto Serif ve JetBrains Mono (SIL OFL 1.1).
 	just now	az önce
 	{n} s ago	{n} sn önce
@@ -456,8 +445,6 @@
 	A cut sequence with transitions, effects and music	Geçişler, efektler ve müzik içeren kurgulanmış bir sekans
 	Bars and Tone	Renk Çubukları ve Ton
 	SMPTE HD bars with 1 kHz reference tone	1 kHz referans tonlu SMPTE HD renk çubukları
-	Community	Topluluk
-	Join us on Discord	Discord'da bize katılın
 	OMF Export Settings	OMF Dışa Aktarma Ayarları
 	AAF Export Settings	AAF Dışa Aktarma Ayarları
 	OMF Title:	OMF Başlığı:
@@ -3599,7 +3586,6 @@
 	Opens in your web browser: {url}	Web tarayıcınızda açılır: {url}
 	Saves this session's log and shows it in your file manager.	Bu oturumun günlüğünü kaydeder ve dosya yöneticinizde gösterir.
 	Shows a report on this computer.	Bu bilgisayar hakkında bir rapor gösterir.
-	Shows the version, community links and credits in a FilmCraft window.	Sürümü, topluluk bağlantılarını ve jeneriği bir FilmCraft penceresinde gösterir.
 	Couldn't open your web browser	Web tarayıcınız açılamadı
 	Open this address in your browser yourself:	Bu adresi tarayıcınızda kendiniz açın:
 

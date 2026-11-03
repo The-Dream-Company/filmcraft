@@ -141,5 +141,5 @@ fn revert_confirmation_buttons_show_the_pointing_hand() {
 fn settings_buttons_show_the_pointing_hand() {
     let mut d = Driver::new(demo());
     d.menu("app.settings.general");
-    d.assert_pointing_hand(&["settings.help", "settings.reset", "settings.ok", "settings.cancel"]);
+    d.assert_pointing_hand(&["settings.reset", "settings.ok", "settings.cancel"]);
 }

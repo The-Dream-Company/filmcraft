@@ -4,7 +4,7 @@
 # Brazilian Portuguese video-editing vocabulary. No proprietary localisation resource, string table
 # or product UI was consulted or copied; add entries the same way. Commands use the infinitive
 # ("Salvar como…"), instructions use the polite imperative ("Selecione um clipe…"), and labels use
-# sentence case. Product, format and technology names (FilmCraft, ArtCraft, Lumetri, ProRes, LUFS,
+# sentence case. Product, format and technology names (FilmCraft, Lumetri, ProRes, LUFS,
 # EDL, AAF…) keep their spelling; decimals in prose use a comma ("29,97 fps"). This catalog has the
 # same entries as `es.tsv` plus the native macOS Settings menu; strings added later show in English
 # until they are translated. A native-speaker review is welcome.
@@ -44,7 +44,6 @@
 	Apply Default Transitions to Selection	Aplicar transições padrão à seleção
 	Apply Video Transition	Aplicar transição de vídeo
 	Arrange	Organizar
-	ArtCraft Website	Site do ArtCraft
 	Assembly	Montagem
 	Attach Proxies…	Anexar proxies…
 	Audio Channels…	Canais de áudio…
@@ -141,9 +140,6 @@
 	File	Arquivo
 	File…	Arquivo…
 	Fill frame	Preencher quadro
-	FilmCraft Help…	Ajuda do FilmCraft…
-	FilmCraft on GitHub	FilmCraft no GitHub
-	FilmCraft on getartcraft.com	FilmCraft no getartcraft.com
 	Find Next	Localizar próximo
 	Find…	Localizar…
 	Fit	Ajustar
@@ -187,7 +183,6 @@
 	Insert Frame Hold Segment	Inserir segmento de quadro congelado
 	Install Motion Graphics Template…	Instalar modelo de gráficos de movimento…
 	Interpret Footage…	Interpretar clipes…
-	Join the ArtCraft Discord…	Entre no Discord do ArtCraft…
 	Keyboard Shortcuts…	Atalhos de teclado…
 	Label	Rótulo
 	Labels…	Rótulos…
@@ -281,7 +276,6 @@
 	Render Selection	Renderizar seleção
 	Replace Fonts in Projects…	Substituir fontes em projetos…
 	Replace With Clip	Substituir por clipe
-	Report an Issue…	Relatar um problema…
 	Reset All Parameters	Redefinir todos os parâmetros
 	Reset Duration	Redefinir duração
 	Reset to Saved Layout	Redefinir para o layout salvo
@@ -383,7 +377,6 @@
 	Master volume: use the Audio Track Mixer	Volume principal: use o misturador de faixas de áudio
 	Search	Pesquisar
 	Quick Export	Exportação rápida
-	Join the ArtCraft Discord (discord.gg/artcraft)	Entre no Discord do ArtCraft (discord.gg/artcraft)
 	Cancel	Cancelar
 	OK	OK
 	Interpret Footage	Interpretar clipes
@@ -426,10 +419,6 @@
 	Delete Caption Track	Excluir faixa de legendas
 	Delete Empty Caption Tracks	Excluir faixas de legendas vazias
 	Version {version}	Versão {version}
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	Um editor de vídeo não linear em Rust puro, desenvolvido em sala limpa. Parte da família ArtCraft.
-	Join the ArtCraft Discord	Entre no Discord do ArtCraft
-	Source code on GitHub	Código-fonte no GitHub
-	Report an issue	Relatar um problema
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT OR Apache-2.0. Fontes: Inter, Noto Serif e JetBrains Mono (SIL OFL 1.1).
 	just now	agora mesmo
 	{n} s ago	há {n} s
@@ -470,8 +459,6 @@
 	A cut sequence with transitions, effects and music	Uma sequência editada com transições, efeitos e música
 	Bars and Tone	Barras e tom
 	SMPTE HD bars with 1 kHz reference tone	Barras SMPTE HD com tom de referência de 1 kHz
-	Community	Comunidade
-	Join us on Discord	Junte-se a nós no Discord
 	OMF Export Settings	Configurações de exportação OMF
 	AAF Export Settings	Configurações de exportação AAF
 	OMF Title:	Título OMF:

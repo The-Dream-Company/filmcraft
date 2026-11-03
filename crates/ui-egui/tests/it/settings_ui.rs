@@ -144,7 +144,7 @@ fn every_category_opens_from_its_command_and_menu() {
         for other in CATEGORIES {
             assert!(d.has(&format!("settings.category.{other}")), "category list row {other} on {c}");
         }
-        assert!(d.has("settings.ok") && d.has("settings.cancel") && d.has("settings.reset") && d.has("settings.help"));
+        assert!(d.has("settings.ok") && d.has("settings.cancel") && d.has("settings.reset"));
         d.shot(c);
         d.click("settings.cancel");
         assert!(d.inspect()["dialog"].is_null(), "Cancel closes ({c})");

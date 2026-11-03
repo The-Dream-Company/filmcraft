@@ -10,7 +10,7 @@
 # Swedish video-editing vocabulary (spår, spelmarkör, sekvens, bin, snitt, nyckelbildruta,
 # undertext, rendera…). No proprietary localisation resource, string table or product UI was
 # consulted or copied, and no other FilmCraft catalog was translated from; add entries the same
-# way. Product, technology and format names (FilmCraft, ArtCraft, Lumetri, ProRes, LUFS, H.264…)
+# way. Product, technology and format names (FilmCraft, Lumetri, ProRes, LUFS, H.264…)
 # keep their spelling, as do key-cap names (Shift, Alt, Ctrl, Cmd, Opt, Esc).
 # Labels use sentence case; commands are imperatives; Delete = Radera, Remove = Ta bort,
 # Clear = Rensa; decimals use a comma and frame rates are written bild/s (29,97 bild/s).
@@ -41,7 +41,6 @@
 	Apply Default Transitions to Selection	Använd standardövergångar på markering
 	Apply Video Transition	Använd videoövergång
 	Arrange	Ordna
-	ArtCraft Website	ArtCrafts webbplats
 	Assembly	Sammanställning
 	Attach Proxies…	Koppla proxyer…
 	Audio Channels…	Ljudkanaler…
@@ -134,9 +133,6 @@
 	File	Arkiv
 	File…	Fil…
 	Fill frame	Fyll bildrutan
-	FilmCraft Help…	FilmCraft-hjälp…
-	FilmCraft on GitHub	FilmCraft på GitHub
-	FilmCraft on getartcraft.com	FilmCraft på getartcraft.com
 	Find Next	Sök nästa
 	Find…	Sök…
 	Fit	Anpassa
@@ -180,7 +176,6 @@
 	Insert Frame Hold Segment	Infoga frysbildssegment
 	Install Motion Graphics Template…	Installera rörlig grafik-mall…
 	Interpret Footage…	Tolka material…
-	Join the ArtCraft Discord…	Gå med i ArtCraft på Discord…
 	Keyboard Shortcuts…	Kortkommandon…
 	Label	Etikett
 	Labels…	Etiketter…
@@ -274,7 +269,6 @@
 	Render Selection	Rendera markering
 	Replace Fonts in Projects…	Ersätt typsnitt i projekt…
 	Replace With Clip	Ersätt med klipp
-	Report an Issue…	Rapportera ett problem…
 	Reset All Parameters	Återställ alla parametrar
 	Reset Duration	Återställ längd
 	Reset to Saved Layout	Återställ till sparad layout
@@ -375,7 +369,6 @@
 	Master volume: use the Audio Track Mixer	Huvudvolym: använd ljudspårsmixern
 	Search	Sök
 	Quick Export	Snabbexport
-	Join the ArtCraft Discord (discord.gg/artcraft)	Gå med i ArtCraft på Discord (discord.gg/artcraft)
 	Cancel	Avbryt
 	OK	OK
 	Interpret Footage	Tolka material
@@ -418,10 +411,6 @@
 	Delete Caption Track	Radera undertextspåret
 	Delete Empty Caption Tracks	Radera tomma undertextspår
 	Version {version}	Version {version}
-	A clean-room, pure-Rust non-linear video editor. Part of the ArtCraft family.	En icke-linjär videoredigerare i ren Rust, utvecklad enligt clean room-metoden. En del av ArtCraft-familjen.
-	Join the ArtCraft Discord	Gå med i ArtCraft på Discord
-	Source code on GitHub	Källkod på GitHub
-	Report an issue	Rapportera ett problem
 	MIT OR Apache-2.0. Fonts: Inter, Noto Serif and JetBrains Mono (SIL OFL 1.1).	MIT OR Apache-2.0. Typsnitt: Inter, Noto Serif och JetBrains Mono (SIL OFL 1.1).
 	just now	nyss
 	{n} s ago	för {n} s sedan
@@ -459,8 +448,6 @@
 	A cut sequence with transitions, effects and music	En klippt sekvens med övergångar, effekter och musik
 	Bars and Tone	Färgstaplar och ton
 	SMPTE HD bars with 1 kHz reference tone	SMPTE HD-färgstaplar med 1 kHz referenston
-	Community	Gemenskap
-	Join us on Discord	Gå med oss på Discord
 	OMF Export Settings	OMF-exportinställningar
 	AAF Export Settings	AAF-exportinställningar
 	OMF Title:	OMF-titel:
@@ -3600,7 +3587,6 @@
 	Opens in your web browser: {url}	Öppnas i din webbläsare: {url}
 	Saves this session's log and shows it in your file manager.	Sparar loggen för den här sessionen och visar den i filhanteraren.
 	Shows a report on this computer.	Visar en rapport om den här datorn.
-	Shows the version, community links and credits in a FilmCraft window.	Visar version, communitylänkar och medverkande i ett FilmCraft-fönster.
 	Couldn't open your web browser	Det gick inte att öppna webbläsaren
 	Open this address in your browser yourself:	Öppna den här adressen i webbläsaren själv:
 	Delete Redoable Actions	Radera åtgärder som kan göras om
@@ -3626,8 +3612,6 @@
 	Could not check for updates:\n{error}	Det gick inte att söka efter uppdateringar:\n{error}
 	FilmCraft {version} is currently the newest version available.	FilmCraft {version} är den senaste tillgängliga versionen.
 	Hardware decoding: Auto uses the system's video decoder (VideoToolbox on macOS, Media Foundation on Windows, VA-API for H.264 and HEVC on Linux) for the streams it supports, and FilmCraft's own decoder for everything else or if the hardware fails. Media that is already open keeps its decoder until it is reopened.	Hårdvaruavkodning: Auto använder systemets videoavkodare (VideoToolbox på macOS, Media Foundation på Windows, VA-API för H.264 och HEVC på Linux) för de strömmar den stöder, och FilmCrafts egen avkodare för allt annat eller om hårdvaruavkodningen misslyckas. Media som redan är öppna behåller sin avkodare tills de öppnas igen.
-	Looks for a newer FilmCraft release and offers to update.	Söker efter en nyare version av FilmCraft och erbjuder uppdatering.
-	Check for Updates…	Sök efter uppdateringar…
 	Set Work Area Bar In Point	Ange arbetsområdesfältets in-punkt
 	Set Work Area Bar Out Point	Ange arbetsområdesfältets ut-punkt
 	FilmCraft Updates	FilmCraft-uppdateringar

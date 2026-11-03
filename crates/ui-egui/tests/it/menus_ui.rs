@@ -372,7 +372,7 @@ fn saved_projects_are_listed_in_home_and_open_recent() {
     assert_eq!(d.app().session.path.as_deref(), Some(a.as_str()));
     assert_eq!(d.app().session.prefs.general.recent_projects, [a.clone(), b.clone()]);
     // Home lists them too, newest first, and a click opens one
-    d.click("header.home");
+    d.exec("mode.import", json!({}));
     let rows = d.ok("ui.elements", json!({"prefix": "import.recent."}));
     let rows: Vec<&str> = rows.as_array().unwrap().iter().map(|e| e["label"].as_str().unwrap()).collect();
     assert_eq!(rows, ["first cut.fcproj", "second cut.fcproj"]);
