@@ -11,6 +11,8 @@
 //! await filmcraft.importUrl("/clip.mp4")                   // fetch + import (tests)
 //! await filmcraft.importFiles(input.files)                 // File / FileList / File[]
 //! await filmcraft.openProject(file)                        // .fcproj File or URL
+//! await filmcraft.openProject(file, {quiet: true})         // missing media: no Link Media dialog
+//! await filmcraft.attachFiles(files)                       // media of the open project, by name
 //! filmcraft.files(); await filmcraft.readFile("/exports/a.mp4"); filmcraft.info()
 //! ```
 //!
@@ -189,6 +191,15 @@ pub fn install() -> Result<(), JsValue> {
     )?;
     set_fn(
         &obj,
+        "attachFiles",
+        Closure::<dyn Fn(JsValue) -> js_sys::Promise>::new(|files: JsValue| {
+            let files = files_of(&files);
+            future_to_promise(async move { Ok(to_js(&crate::import::attach_files(files).await)) })
+        })
+        .into_js_value(),
+    )?;
+    set_fn(
+        &obj,
         "importUrl",
         Closure::<dyn Fn(String, JsValue) -> js_sys::Promise>::new(|url: String, name: JsValue| {
             future_to_promise(caught(async move {
@@ -201,13 +212,14 @@ pub fn install() -> Result<(), JsValue> {
     set_fn(
         &obj,
         "openProject",
-        Closure::<dyn Fn(JsValue) -> js_sys::Promise>::new(|src: JsValue| {
+        Closure::<dyn Fn(JsValue, JsValue) -> js_sys::Promise>::new(|src: JsValue, opts: JsValue| {
+            let quiet = from_js(&opts).get("quiet").and_then(Value::as_bool).unwrap_or(false);
             future_to_promise(caught(async move {
                 let file = match src.as_string() {
                     Some(url) => fetch_file(&url, None).await?,
                     None => files_of(&src).into_iter().next().ok_or("need a File or URL")?,
                 };
-                crate::import::open_project_file(file).await.map(|v| to_js(&v)).map_err(|e| JsValue::from(js_sys::Error::new(&e)))
+                crate::import::open_project_file(file, quiet).await.map(|v| to_js(&v)).map_err(|e| JsValue::from(js_sys::Error::new(&e)))
             }))
         })
         .into_js_value(),

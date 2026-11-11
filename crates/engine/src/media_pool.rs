@@ -62,6 +62,8 @@ pub struct MediaPool {
     /// Media and proxy paths that came from a document, with that document's path (see
     /// [`Self::follow`]).
     stored: RwLock<HashMap<String, Option<PathBuf>>>,
+    /// Per item: how often [`Self::reopen`] dropped its source (the frontends' frame caches key on it).
+    reopened: RwLock<HashMap<ItemId, u64>>,
 }
 
 impl Default for MediaPool {
@@ -75,6 +77,7 @@ impl Default for MediaPool {
             failures: Arc::default(),
             openers: RwLock::new(filmcraft_codecs::openers()),
             stored: RwLock::default(),
+            reopened: RwLock::default(),
         }
     }
 }
@@ -181,6 +184,20 @@ impl MediaPool {
         self.sources.write().unwrap_or_else(PoisonError::into_inner).remove(&item);
         self.proxies.write().unwrap_or_else(PoisonError::into_inner).remove(&item);
         self.offline.write().unwrap_or_else(PoisonError::into_inner).remove(&item);
+    }
+
+    /// [`Self::remove`] for an item whose file changed at the same path (it came back, or was
+    /// replaced): frames drawn from the old source must go too, see [`Self::reopened`].
+    pub fn reopen(&self, item: ItemId) {
+        self.remove(item);
+        let mut r = self.reopened.write().unwrap_or_else(PoisonError::into_inner);
+        let n = r.entry(item).or_default();
+        *n = n.wrapping_add(1);
+    }
+
+    /// How often [`Self::reopen`] dropped this item's source.
+    pub fn reopened(&self, item: ItemId) -> u64 {
+        self.reopened.read().unwrap_or_else(PoisonError::into_inner).get(&item).copied().unwrap_or(0)
     }
 
     /// Record the media and proxy paths of `p`, loaded from the document at `document` (None: one

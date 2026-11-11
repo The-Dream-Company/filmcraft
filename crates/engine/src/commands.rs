@@ -1782,7 +1782,7 @@ fn build() -> Vec<CommandSpec> {
             let was_missing = s.offline.missing.clone();
             crate::relink::refresh(s);
             for item in was_missing.iter().filter(|i| !s.offline.missing.contains(i)) {
-                s.media.remove(*item);
+                s.media.reopen(*item);
             }
             Ok(out)
         }),

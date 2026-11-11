@@ -99,6 +99,27 @@ pub fn register_blob(name: &str, blob: web_sys::Blob) -> String {
     })
 }
 
+/// Register a browser `File` at exactly `/files/<name>` (`attachFiles`: the path a project names),
+/// replacing what was there: the old Blob and its cached chunks are dropped.
+pub fn attach_blob(name: &str, blob: web_sys::Blob) -> String {
+    let size = blob.size() as u64;
+    let clean: String = name.chars().map(|c| if c == '/' || c == '\\' { '_' } else { c }).collect();
+    let path = format!("/files/{clean}");
+    FS.with(|fs| {
+        let mut fs = fs.borrow_mut();
+        let id = fs.next_id;
+        fs.next_id += 1;
+        fs.blobs.insert(id, blob);
+        if let Some(Entry::Blob { id: old, .. }) = fs.entries.insert(path.clone(), Entry::Blob { id, size }) {
+            fs.blobs.remove(&old);
+            fs.chunks.retain(|(b, _), _| *b != old);
+            fs.failed.retain(|(b, _), _| *b != old);
+        }
+        fs.recount();
+    });
+    path
+}
+
 /// Put bytes at a path (no download).
 pub fn put(path: &str, data: Vec<u8>) {
     FS.with(|fs| fs.borrow_mut().entries.insert(path.to_string(), Entry::Mem(data.into())));

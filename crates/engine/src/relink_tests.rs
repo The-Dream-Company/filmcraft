@@ -484,3 +484,104 @@ fn offline_all_is_saved_and_reopening_does_not_ask_again() {
     assert!(open(&path).offline.prompt, "newly missing media asks again");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// `<root>/Project/p.fcproj` using `<root>/Media/{a,b,c}.mov`, then the media folder moved to
+/// `<root>/Stash`: the project opens with three missing items.
+fn three_missing(root: &std::path::Path) -> (String, Vec<ItemId>, Vec<String>) {
+    let media = root.join("Media");
+    std::fs::create_dir_all(&media).unwrap();
+    let files = [media.join("a.mov"), media.join("b.mov"), media.join("c.mov")];
+    for (f, scene) in files.iter().zip([DemoScene::Aurora, DemoScene::CityNight, DemoScene::Dunes]) {
+        make_movie(f, scene, W, H, 12);
+    }
+    let (mut s, items, _) = session_with(&[&files[0], &files[1], &files[2]]);
+    let proj = root.join("Project");
+    std::fs::create_dir_all(&proj).unwrap();
+    let path = proj.join("p.fcproj").to_string_lossy().into_owned();
+    s.execute("file.save", json!({"path": path})).unwrap();
+    drop(s);
+    std::fs::rename(&media, root.join("Stash")).unwrap();
+    (path, items, files.iter().map(|f| f.to_string_lossy().into_owned()).collect())
+}
+
+/// What a host does after `attachFiles`: put the file back at the path the project names.
+fn put_back(root: &std::path::Path, name: &str) {
+    std::fs::create_dir_all(root.join("Media")).unwrap();
+    std::fs::rename(root.join("Stash").join(name), root.join("Media").join(name)).unwrap();
+}
+
+fn status(s: &mut Session) -> Vec<String> {
+    s.execute("media.status", json!({})).unwrap().as_array().unwrap().iter().map(|m| m["status"].as_str().unwrap().to_string()).collect()
+}
+
+// T3 (Filmsquare): open first, hand the media over afterwards. A file put at the path an item
+// names brings that item online without an import: no bin item, no undo step.
+#[test]
+fn attach_brings_items_online_by_path_without_an_edit() {
+    let root = tmp_dir("relink-attach");
+    let (path, items, files) = three_missing(&root);
+    let mut s = open(&path);
+    assert_eq!(s.offline.missing.len(), 3);
+    // the monitors drew the slate before the media arrived
+    let (w, h, px) = frame_rgba(&mut s, 3, 1.0);
+    assert!(psnr(&px, &slate_rgba8(w, h, "a.mov", OfflineReason::Missing)) > 40.0);
+    // an edit before the media arrives, and where the user is
+    s.edit("Rename c", |p, _| {
+        p.item_mut(items[2]).unwrap().name = "c renamed".into();
+        Ok(())
+    })
+    .unwrap();
+    s.state.project_selection = vec![items[1]];
+    let playhead = s.playhead();
+    let (undo, item_count, dirty) = (s.history.undo.len(), s.project.items.len(), s.is_dirty());
+
+    put_back(&root, "a.mov");
+    put_back(&root, "b.mov");
+    let back = crate::relink::attach(&mut s, &files[..2]);
+    assert_eq!(s.playhead(), playhead, "attach leaves the playhead");
+    assert_eq!(back, vec![items[0], items[1]]);
+    assert_eq!(status(&mut s), ["online", "online", "missing"]);
+    assert_eq!(s.offline.missing, vec![items[2]]);
+    assert_eq!([0, 1, 2].map(|i| s.media.reopened(items[i])), [1, 1, 0], "frame caches of the items that came back go");
+    assert!(psnr(&frame_rgba(&mut s, 3, 1.0).2, &slate_rgba8(w, h, "a.mov", OfflineReason::Missing)) < 20.0, "a renders its file now");
+    let (_, _, c) = frame_rgba(&mut s, 27, 1.0);
+    assert!(psnr(&c, &slate_rgba8(w, h, "c.mov", OfflineReason::Missing)) > 40.0, "c is still missing");
+    // nothing imported, nothing edited, nothing moved
+    assert_eq!(s.history.undo.len(), undo, "attach adds no undo step");
+    assert_eq!(s.project.items.len(), item_count, "attach adds no bin item");
+    assert_eq!(s.is_dirty(), dirty);
+    assert_eq!(s.state.project_selection, vec![items[1]]);
+
+    // undo takes back the edit made before attach, not the media
+    s.execute("edit.undo", json!({})).unwrap();
+    assert_eq!(s.project.item(items[2]).unwrap().name, "c.mov");
+    assert_eq!(status(&mut s), ["online", "online", "missing"]);
+
+    // a file that matches no item is only there: no bin item, nothing comes online
+    let stray = root.join("Stash").join("stray.mov");
+    make_movie(&stray, DemoScene::Aurora, W, H, 4);
+    let rev = s.revision;
+    assert!(crate::relink::attach(&mut s, &[stray.to_string_lossy().into_owned()]).is_empty());
+    assert_eq!(s.project.items.len(), item_count);
+    assert_eq!(s.revision, rev, "nothing to redraw");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+// The hub marks media offline on purpose in the document: attaching a file at its path leaves it
+// offline (relinking clears that mark, attaching does not).
+#[test]
+fn attach_leaves_items_made_offline_offline() {
+    let root = tmp_dir("relink-attach-offline");
+    let (path, items, files) = three_missing(&root);
+    let mut s = open(&path);
+    s.edit("offline a", |p, _| {
+        p.item_mut(items[0]).unwrap().as_media_mut().unwrap().offline = true;
+        Ok(())
+    })
+    .unwrap();
+    crate::relink::refresh(&mut s);
+    put_back(&root, "a.mov");
+    assert!(crate::relink::attach(&mut s, &files[..1]).is_empty());
+    assert_eq!(status(&mut s)[0], "offline");
+    let _ = std::fs::remove_dir_all(&root);
+}

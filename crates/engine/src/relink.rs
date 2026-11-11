@@ -139,6 +139,34 @@ pub fn refresh(s: &mut Session) -> Vec<Missing> {
     list
 }
 
+/// A host put files at `paths` (the web page's `attachFiles`): missing items whose path is there
+/// now come online, and items already using one of those paths reopen it. Nothing is imported and
+/// nothing is edited: no bin item, no undo step, selection and playhead stay. Items made offline
+/// on purpose stay offline. Returns the items that came online.
+pub fn attach(s: &mut Session, paths: &[String]) -> Vec<ItemId> {
+    for p in paths {
+        s.media.allow(p);
+    }
+    let was_missing = s.offline.missing.clone();
+    let list = refresh(s);
+    let back: Vec<ItemId> = was_missing.into_iter().filter(|i| !s.offline.missing.contains(i)).collect();
+    let uses = |r: Option<&MediaRef>| matches!(r, Some(MediaRef::File { path }) if paths.contains(path));
+    let reopen: Vec<ItemId> =
+        s.project.items.values().filter(|it| it.as_media().is_some_and(|m| uses(Some(&m.media)) || uses(m.proxy.as_ref()))).map(|it| it.id).collect();
+    // drop the cached slate (or the source of a replaced file): the next frame opens the file
+    let all: std::collections::BTreeSet<ItemId> = back.iter().chain(&reopen).copied().collect();
+    for item in &all {
+        s.media.reopen(*item);
+    }
+    if !back.is_empty() || !reopen.is_empty() {
+        s.bump_view();
+    }
+    if !list.iter().any(|m| m.status == "missing") {
+        s.offline.prompt = false;
+    }
+    back
+}
+
 /// Which properties must match (Link Media ▸ Match File Properties) and how to relink.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]

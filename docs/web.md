@@ -118,12 +118,13 @@ with the method's `result`, errors reject.
 | `filmcraft.screenshot(params)` | `{pngBase64, width, height}` of the canvas (or `{panel}`) |
 | `filmcraft.importFiles(files)` | import `File` / `FileList` / `File[]`; resolves `{items, errors, paths}` |
 | `filmcraft.importUrl(url, name?)` | fetch a URL and import it (tests) |
-| `filmcraft.openProject(fileOrUrl)` | open a `.fcproj` |
+| `filmcraft.openProject(fileOrUrl, {quiet}?)` | open a `.fcproj`; `{quiet: true}`: missing media doesn't open Link Media |
+| `filmcraft.attachFiles(files)` | hand over media of the open project: each file goes to `/files/<name>`, items naming that path come online; no import, no undo step. Resolves `{paths, errors, online}` (`online`: item ids) |
 | `filmcraft.files()` | the virtual files: `{path, size, kind}` |
 | `filmcraft.readFile(path)` | a file's bytes (`Uint8Array`), e.g. an export |
 | `filmcraft.info()` | backend, compositor, isolation, OPFS, WebCodecs support and counters, start-up time |
 
-`window.filmcraftLoad` holds `{wasmMs, readyMs}` (module fetch+compile, and until the app runs).
+`window.filmcraftLoad` holds `{wasmMs, readyMs}` (module fetch+compile, and until the app runs) and, from the start, `can`: the calls this build adds (`"attachFiles"`, `"quietOpen"`).
 
 ```js
 await filmcraft.importUrl("/clip.mp4");
