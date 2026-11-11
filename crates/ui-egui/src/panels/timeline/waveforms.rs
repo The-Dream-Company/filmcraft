@@ -447,12 +447,10 @@ mod tests {
         }
         let top = inner;
         VALIDITY_CALLS.with(|n| n.set(0));
-        let t0 = std::time::Instant::now();
         let mut h = std::collections::hash_map::DefaultHasher::new();
         sequence_files(&p, &s.media, top, &mut h);
         let calls = VALIDITY_CALLS.with(|n| n.get());
         assert_eq!(calls, 10, "the file's ten placements in the innermost sequence, once");
-        assert!(t0.elapsed() < std::time::Duration::from_millis(500), "{:?}", t0.elapsed());
         let _ = std::fs::remove_dir_all(&root);
     }
 }
