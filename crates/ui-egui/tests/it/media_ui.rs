@@ -416,25 +416,36 @@ fn link_media_dialog_relinks_moved_media() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-// T3 (Filmsquare): a host opens a project quietly (the web's `openProject(file, {quiet: true})`
-// clears the prompt right after `file.open`) and hands the media over afterwards (`attachFiles`):
-// the Link Media dialog never opens and the clips come online.
+// T3 (Filmsquare): a host opens a project quietly (`FilmcraftApp::open_project_quietly`, the web's
+// `openProject(file, {quiet: true})`) and hands the media over afterwards (`attachFiles`): no Link
+// Media dialog, and one still open from an earlier, normal open closes. A quiet open that fails
+// leaves the dialog and the project as they were.
 #[test]
-fn quiet_open_shows_no_link_media_dialog_and_attach_brings_media_online() {
+fn quiet_open_closes_link_media_and_attach_brings_media_online() {
     let root = tmp_dir("quiet-open");
     let path = moved_project(&root);
     let mut s = Session::default();
     s.execute("file.open", json!({"path": path})).unwrap();
-    assert!(s.offline.prompt, "setup: a normal open asks for the missing media");
-    s.offline.prompt = false;
     let mut d = Driver::new(s);
+    d.frames(6);
+    assert!(d.app().ui.link_media.is_some(), "setup: a normal open asks for the missing media");
+
+    let project = d.app().session.project.clone();
+    let bad = root.join("nope.fcproj").to_string_lossy().into_owned();
+    assert!(d.app().open_project_quietly(&bad).is_err());
+    d.frames(3);
+    assert!(d.app().ui.link_media.is_some(), "a failed quiet open changes nothing");
+    assert!(Arc::ptr_eq(&d.app().session.project, &project));
+
+    let r = d.app().open_project_quietly(&path).unwrap();
+    assert_eq!(r["missingMedia"], json!(2), "{r}");
     d.frames(6);
     assert!(d.app().ui.link_media.is_none());
     assert!(d.ids("linkMedia.").is_empty(), "no Link Media dialog");
+
     std::fs::rename(root.join("Moved").join("Media"), root.join("Media")).unwrap();
     let paths: Vec<String> = ["Harbour.mov", "Night.mov"].iter().map(|n| root.join("Media").join(n).to_string_lossy().into_owned()).collect();
-    let back = filmcraft_engine::relink::attach(&mut d.app().session, &paths);
-    assert_eq!(back.len(), 2);
+    assert_eq!(filmcraft_engine::relink::attach(&mut d.app().session, &paths).len(), 2);
     d.frames(6);
     assert!(d.app().ui.link_media.is_none());
     let st = d.exec("media.status", json!({}));

@@ -585,3 +585,57 @@ fn attach_leaves_items_made_offline_offline() {
     assert_eq!(status(&mut s)[0], "offline");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+// What the host relies on: attaching to a clean project leaves the document byte for byte as it
+// was, the project unmodified and the history as it was.
+#[test]
+fn attach_to_a_clean_project_changes_no_document_byte() {
+    let root = tmp_dir("relink-attach-clean");
+    let (path, items, files) = three_missing(&root);
+    let mut s = open(&path);
+    assert!(!s.is_dirty(), "setup: a clean project");
+    let doc = filmcraft_format::encode(&s.project, false);
+    let undo = s.history.undo.len();
+    put_back(&root, "a.mov");
+    put_back(&root, "b.mov");
+    assert_eq!(crate::relink::attach(&mut s, &files), vec![items[0], items[1]]);
+    assert_eq!(filmcraft_format::encode(&s.project, false), doc, "the document is untouched");
+    assert!(!s.is_dirty(), "attach does not mark the project modified");
+    assert_eq!(s.history.undo.len(), undo);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+fn missing_toasts(s: &Session) -> usize {
+    s.events.iter().filter(|e| matches!(e, crate::Event::Toast { message, .. } if message.contains("media file(s) are missing"))).count()
+}
+
+// A quiet open asks nothing: no Link Media prompt and no "media file(s) are missing" toast. A
+// normal open still does both, and a quiet open that fails leaves the open project as it was.
+#[test]
+fn quiet_open_neither_prompts_nor_toasts_and_a_failed_one_changes_nothing() {
+    let root = tmp_dir("relink-quiet-open");
+    let (path, _, _) = three_missing(&root);
+    let s = open(&path);
+    assert!(s.offline.prompt);
+    assert_eq!(missing_toasts(&s), 1, "a normal open asks");
+
+    let mut s = Session::default();
+    let r = crate::relink::open_quietly(&mut s, &path).unwrap();
+    assert_eq!(r["missingMedia"], json!(3), "{r}");
+    assert!(!s.offline.prompt, "no Link Media");
+    assert_eq!(missing_toasts(&s), 0, "no missing-media toast");
+    assert_eq!(s.offline.missing.len(), 3, "File ▸ Link Media… still lists them");
+    assert!(!s.offline.quiet, "only that open was quiet");
+
+    // a normal open later asks again
+    s.execute("file.open", json!({"path": path})).unwrap();
+    assert!(s.offline.prompt);
+
+    // failing: nothing changes
+    let (project, prompt, rev) = (s.project.clone(), s.offline.prompt, s.revision);
+    let bad = root.join("nope.fcproj").to_string_lossy().into_owned();
+    assert!(crate::relink::open_quietly(&mut s, &bad).is_err());
+    assert!(std::sync::Arc::ptr_eq(&s.project, &project));
+    assert_eq!((s.offline.prompt, s.revision, s.offline.quiet), (prompt, rev, false));
+    let _ = std::fs::remove_dir_all(&root);
+}

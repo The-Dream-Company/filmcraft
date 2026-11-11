@@ -73,6 +73,9 @@ pub struct OfflineState {
     /// The frontend should show the Link Media dialog (set when a project opens with missing
     /// media; cleared by relinking everything, Offline All or Cancel).
     pub prompt: bool,
+    /// Set by [`open_quietly`] while it opens: missing media neither asks nor toasts.
+    #[serde(skip)]
+    pub quiet: bool,
 }
 
 /// One missing / offline media item.
@@ -139,10 +142,20 @@ pub fn refresh(s: &mut Session) -> Vec<Missing> {
     list
 }
 
+/// `file.open` for a host that hands the media over afterwards ([`attach`]): missing media opens
+/// no Link Media dialog and queues no "media file(s) are missing" toast. Other warnings stay. A
+/// failed open leaves the session as it was.
+pub fn open_quietly(s: &mut Session, path: &str) -> Result<Value> {
+    s.offline.quiet = true;
+    let r = s.execute("file.open", json!({"path": path}));
+    s.offline.quiet = false;
+    r
+}
+
 /// A host put files at `paths` (the web page's `attachFiles`): missing items whose path is there
-/// now come online, and items already using one of those paths reopen it. Nothing is imported and
-/// nothing is edited: no bin item, no undo step, selection and playhead stay. Items made offline
-/// on purpose stay offline. Returns the items that came online.
+/// now come online. Nothing is imported and nothing is edited: no bin item, no undo step, the
+/// document, selection and playhead stay. Items made offline on purpose stay offline. Returns the
+/// items that came online.
 pub fn attach(s: &mut Session, paths: &[String]) -> Vec<ItemId> {
     for p in paths {
         s.media.allow(p);
@@ -150,15 +163,11 @@ pub fn attach(s: &mut Session, paths: &[String]) -> Vec<ItemId> {
     let was_missing = s.offline.missing.clone();
     let list = refresh(s);
     let back: Vec<ItemId> = was_missing.into_iter().filter(|i| !s.offline.missing.contains(i)).collect();
-    let uses = |r: Option<&MediaRef>| matches!(r, Some(MediaRef::File { path }) if paths.contains(path));
-    let reopen: Vec<ItemId> =
-        s.project.items.values().filter(|it| it.as_media().is_some_and(|m| uses(Some(&m.media)) || uses(m.proxy.as_ref()))).map(|it| it.id).collect();
-    // drop the cached slate (or the source of a replaced file): the next frame opens the file
-    let all: std::collections::BTreeSet<ItemId> = back.iter().chain(&reopen).copied().collect();
-    for item in &all {
+    // drop the cached slate: the next frame opens the file
+    for item in &back {
         s.media.reopen(*item);
     }
-    if !back.is_empty() || !reopen.is_empty() {
+    if !back.is_empty() {
         s.bump_view();
     }
     if !list.iter().any(|m| m.status == "missing") {
@@ -815,8 +824,8 @@ pub fn on_open(s: &mut Session) -> usize {
     }
     // Items made offline on purpose (Make Offline / Offline All) don't ask again.
     let missing = list.iter().filter(|m| m.status == "missing").count();
-    s.offline.prompt = missing > 0;
-    if missing > 0 {
+    s.offline.prompt = missing > 0 && !s.offline.quiet;
+    if s.offline.prompt {
         s.toast(format!("{missing} media file(s) are missing; File > Link Media… reconnects them"));
     }
     list.len()

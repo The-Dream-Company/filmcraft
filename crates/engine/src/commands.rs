@@ -5187,7 +5187,8 @@ pub(crate) fn install_project(s: &mut Session, proj: filmcraft_project::Project,
     let proxies = s.media.use_proxies();
     s.media = std::sync::Arc::new(crate::MediaPool::default());
     s.media.set_use_proxies(proxies);
-    s.offline = Default::default();
+    // a quiet open (`relink::open_quietly`) stays quiet for the new project
+    s.offline = crate::relink::OfflineState { quiet: s.offline.quiet, ..Default::default() };
     let first = proj.sequences().next().map(|i| i.id);
     s.media.add_stored(&proj, path.as_deref());
     s.project = std::sync::Arc::new(proj);

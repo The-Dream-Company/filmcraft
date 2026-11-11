@@ -118,8 +118,8 @@ with the method's `result`, errors reject.
 | `filmcraft.screenshot(params)` | `{pngBase64, width, height}` of the canvas (or `{panel}`) |
 | `filmcraft.importFiles(files)` | import `File` / `FileList` / `File[]`; resolves `{items, errors, paths}` |
 | `filmcraft.importUrl(url, name?)` | fetch a URL and import it (tests) |
-| `filmcraft.openProject(fileOrUrl, {quiet}?)` | open a `.fcproj`; `{quiet: true}`: missing media doesn't open Link Media |
-| `filmcraft.attachFiles(files)` | hand over media of the open project: each file goes to `/files/<name>`, items naming that path come online; no import, no undo step. Resolves `{paths, errors, online}` (`online`: item ids) |
+| `filmcraft.openProject(fileOrUrl, {quiet}?)` | open a `.fcproj`; `{quiet: true}`: missing media neither opens Link Media (an open one closes) nor toasts |
+| `filmcraft.attachFiles(files)` | hand over media of the open project: each file goes to `/files/<name>`, items naming that path come online; no import, no undo step, the document stays as it is. A path already registered keeps its file; a name with `/` or `\` is refused (an error). Resolves `{paths, errors, online}` (`online`: item ids) |
 | `filmcraft.files()` | the virtual files: `{path, size, kind}` |
 | `filmcraft.readFile(path)` | a file's bytes (`Uint8Array`), e.g. an export |
 | `filmcraft.info()` | backend, compositor, isolation, OPFS, WebCodecs support and counters, start-up time |
@@ -144,3 +144,5 @@ cargo xtask web --serve 8765 &
 ffmpeg -f lavfi -i testsrc2=size=640x360:rate=30 -f lavfi -i sine -t 3 -c:v libx264 -pix_fmt yuv420p -c:a aac target/web/dist/web-test.mp4
 node apps/filmcraft-web/tests/smoke.mjs --url http://127.0.0.1:8765/ --media web-test.mp4 --out target/web/smoke
 ```
+
+The host flow (open quietly, then `attachFiles`): `node apps/filmcraft-web/tests/attach-files.mjs --url http://127.0.0.1:8765/`.

@@ -134,38 +134,41 @@ pub async fn import_files(files: Vec<web_sys::File>) -> Value {
 
 /// Hand over the media of the open project (the host opened it first): each file is registered at
 /// `/files/<name>` and the project's items naming that path come online. Nothing is imported or
-/// probed here (the first frame that needs a file opens it): no bin item, no undo step. Returns
-/// `{paths, errors, online}` (`online`: the item ids that came online).
+/// probed here (the first frame that needs a file opens it): no bin item, no undo step. A path
+/// already registered keeps its file. Returns `{paths, errors, online}` (`online`: the item ids
+/// that came online).
 pub async fn attach_files(files: Vec<web_sys::File>) -> Value {
     let mut errors = Vec::new();
     let mut paths = Vec::new();
     for f in files {
-        let name = f.name();
-        if name.is_empty() {
-            errors.push(json!("a file without a name can't be attached"));
-            continue;
+        match fs::attach_blob(&f.name(), f.clone().into()) {
+            Ok((path, added)) => {
+                // a path already registered keeps its file, and its recovery copy
+                if added {
+                    crate::recovery::keep_media(&path, &f);
+                }
+                paths.push(path);
+            }
+            Err(e) => errors.push(json!(e)),
         }
-        let path = fs::attach_blob(&name, f.clone().into());
-        crate::recovery::keep_media(&path, &f);
-        paths.push(path);
     }
     let p = paths.clone();
     let online = on_ui(move |w, _| filmcraft_engine::relink::attach(&mut w.app.session, &p)).await;
     json!({"paths": paths, "errors": errors, "online": online.iter().map(|i| i.0).collect::<Vec<_>>()})
 }
 
-/// Open a `.fcproj` file picked or dropped by the user. `quiet`: missing media doesn't open Link
-/// Media (a host that hands the media over afterwards with [`attach_files`]).
+/// Open a `.fcproj` file picked or dropped by the user. `quiet`: missing media neither opens Link
+/// Media nor toasts (a host that hands the media over afterwards with [`attach_files`]).
 pub async fn open_project_file(file: web_sys::File, quiet: bool) -> Result<Value, String> {
     let buf = JsFuture::from(file.array_buffer()).await.map_err(|e| format!("{e:?}"))?;
     let path = format!("/projects/{}", file.name());
     fs::put(&path, js_sys::Uint8Array::new(&buf).to_vec());
     on_ui(move |w, _| {
-        let r = w.app.session.execute("file.open", json!({"path": path})).map_err(|e| e.to_string());
         if quiet {
-            w.app.session.offline.prompt = false;
+            w.app.open_project_quietly(&path).map_err(|e| e.to_string())
+        } else {
+            w.app.session.execute("file.open", json!({"path": path})).map_err(|e| e.to_string())
         }
-        r
     })
     .await
 }
