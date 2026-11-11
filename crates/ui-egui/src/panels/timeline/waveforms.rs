@@ -86,6 +86,80 @@ fn sequence_audio_key(project: &filmcraft_project::Project, item: ItemId) -> u64
     h.finish()
 }
 
+/// A waveform pass that a read which had to wait (web: bytes still being fetched) interrupted:
+/// the peaks so far and where to go on, so the next pass resumes there instead of starting over.
+/// On the web the browser keeps at most `CACHE_BUDGET` (384 MiB, `apps/filmcraft-web/src/fs.rs`)
+/// of a file's bytes, so a larger file could never be read whole in one pass.
+#[derive(Default)]
+pub struct PeakPass {
+    /// What the peaks are of: the media's reopen count, or a sequence's sound key.
+    generation: u64,
+    out: Vec<(f32, f32)>,
+    /// Next sample to read.
+    next: usize,
+    /// Passes in a row that waited before reading anything new.
+    stalls: u32,
+    /// Not before this (passes never run on consecutive frames once one had to wait).
+    retry_at: Option<web_time::Instant>,
+}
+
+/// After this many passes in a row that read nothing new, the peaks so far are kept as they are.
+const MAX_STALLS: u32 = 4;
+/// Wait after a pass that had to wait: 25 ms, doubled for each pass in a row that read nothing new.
+const RETRY_BASE_MS: u64 = 25;
+
+impl PeakPass {
+    fn new(generation: u64) -> Self {
+        Self { generation, ..Default::default() }
+    }
+
+    fn waiting(&self) -> bool {
+        self.retry_at.is_some_and(|t| web_time::Instant::now() < t)
+    }
+
+    /// Read on from `next` in `chunk`s of `total` samples; `step(start, n)` gives the peaks of a
+    /// chunk (None: an error, the peaks end there). True when finished; false when a read had to
+    /// wait (resume later from the same chunk).
+    fn run(&mut self, total: usize, chunk: usize, mut step: impl FnMut(usize, usize) -> Option<Vec<(f32, f32)>>) -> bool {
+        let earlier = filmcraft_media::pending::take();
+        let mut progressed = false;
+        let done = loop {
+            if self.next >= total {
+                break true;
+            }
+            let n = chunk.max(1).min(total - self.next);
+            let r = step(self.next, n);
+            if filmcraft_media::pending::take() {
+                self.stalls = if progressed { 0 } else { self.stalls.saturating_add(1) };
+                if self.stalls >= MAX_STALLS {
+                    // bytes that never come: keep what was read
+                    break true;
+                }
+                let wait = RETRY_BASE_MS.saturating_mul(1u64 << self.stalls.min(8));
+                self.retry_at = Some(web_time::Instant::now() + std::time::Duration::from_millis(wait));
+                filmcraft_media::pending::mark();
+                return false;
+            }
+            match r {
+                Some(p) => {
+                    self.out.extend(p);
+                    self.next += n;
+                    progressed = true;
+                }
+                None => break true,
+            }
+        };
+        if earlier {
+            filmcraft_media::pending::mark();
+        }
+        done
+    }
+}
+
+fn min_max(c: &[f32]) -> (f32, f32) {
+    c.iter().fold((0f32, 0f32), |(l, h), v| (l.min(*v), h.max(*v)))
+}
+
 /// Waveform peaks of a nested sequence's mix, in the same form as a media item's (min, max per
 /// 256 samples at 48 kHz). They are mixed in the background, and again whenever the sequence's
 /// sound changes; until the new ones are ready the old ones stay on show.
@@ -114,14 +188,18 @@ fn request_sequence_peaks(app: &mut FilmcraftApp, item: ItemId) -> Option<Arc<Ve
         if pend.contains(&pkey) {
             return have;
         }
+        let parts = app.tl.peak_passes.lock().unwrap_or_else(|e| e.into_inner());
+        if parts.get(&pkey).is_some_and(|p| p.generation == key && p.waiting()) {
+            return have;
+        }
         pend.push(pkey);
     }
-    let (peaks, keys, pending) = (app.tl.peaks.clone(), app.tl.seq_peak_keys.clone(), app.tl.peaks_pending.clone());
+    let (peaks, keys, pending, passes) = (app.tl.peaks.clone(), app.tl.seq_peak_keys.clone(), app.tl.peaks_pending.clone(), app.tl.peak_passes.clone());
     let project = app.session.project.clone();
     let provider = app.session.media.provider(project.clone(), app.session.services.clone());
     let run = move || {
+        let mut pass = passes.lock().unwrap_or_else(|e| e.into_inner()).remove(&pkey).filter(|p| p.generation == key).unwrap_or_else(|| PeakPass::new(key));
         // a panic in the mix must not take the app down with it, nor leave the item pending for good
-        let earlier = filmcraft_media::pending::take();
         let mixed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let seq = project.sequence(item)?;
             let sr = seq.settings.sample_rate.max(1);
@@ -129,30 +207,21 @@ fn request_sequence_peaks(app: &mut FilmcraftApp, item: ItemId) -> Option<Arc<Ve
             // one peak per 256 samples at 48 kHz, whatever the sequence's own rate
             let bucket = ((256u64 * sr as u64) / 48_000).max(1) as usize;
             let chunk = (bucket * 750).max(1);
-            let mut out = Vec::with_capacity(total / bucket + 1);
-            let mut s = 0usize;
-            while s < total {
-                let n = chunk.min(total - s);
+            Some(pass.run(total, chunk, |s, n| {
                 let buf = filmcraft_render::audio::mix_sequence(&project, seq, s as i64, n, &provider);
-                let ch = buf.channels.first()?;
-                for c in ch.chunks(bucket) {
-                    let (lo, hi) = c.iter().fold((0f32, 0f32), |(l, h), v| (l.min(*v), h.max(*v)));
-                    out.push((lo, hi));
-                }
-                s += n;
-            }
-            Some(out)
+                Some(buf.channels.first()?.chunks(bucket).map(min_max).collect())
+            }))
         }));
-        // a read that had to wait (web) mixed silence in: mix again on a later frame
-        let deferred = filmcraft_media::pending::take();
-        if earlier || deferred {
-            filmcraft_media::pending::mark();
-        }
-        if let Ok(Some(out)) = mixed
-            && !deferred
-        {
-            peaks.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, Arc::new(out));
-            keys.lock().unwrap_or_else(|e| e.into_inner()).insert(item, key);
+        match mixed {
+            Ok(Some(true)) => {
+                peaks.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, Arc::new(std::mem::take(&mut pass.out)));
+                keys.lock().unwrap_or_else(|e| e.into_inner()).insert(item, key);
+            }
+            // a read had to wait (web): go on from here on a later frame
+            Ok(Some(false)) => {
+                passes.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, pass);
+            }
+            _ => {}
         }
         pending.lock().unwrap_or_else(|e| e.into_inner()).retain(|i| *i != pkey);
     };
@@ -163,46 +232,55 @@ fn request_sequence_peaks(app: &mut FilmcraftApp, item: ItemId) -> Option<Arc<Ve
     have
 }
 
-/// Min/max peaks (one per 256 samples at 48 kHz) of audio stream `stream` of `src`, `dur` long.
-pub(super) fn source_peaks(src: &dyn filmcraft_media::MediaSource, stream: usize, dur: Tick) -> Vec<(f32, f32)> {
+/// Min/max peaks (one per 256 samples at 48 kHz) of audio stream `stream` of `src`, `dur` long,
+/// read on from where `pass` stopped. True when finished (see [`PeakPass::run`]).
+fn source_pass(src: &dyn filmcraft_media::MediaSource, stream: usize, dur: Tick, pass: &mut PeakPass) -> bool {
     let sr = 48_000u32;
     let total = dur.to_units_floor(sr as i64).max(0) as usize;
-    let mut out = Vec::with_capacity(total / 256 + 1);
-    let chunk = 48_000 * 4;
-    let mut s = 0usize;
-    while s < total {
-        let n = chunk.min(total - s);
-        match src.audio_stream(stream, s as i64, n, sr) {
-            Ok(buf) => {
-                let ch = buf.channels.first().cloned().unwrap_or_default();
-                for c in ch.chunks(256) {
-                    let (lo, hi) = c.iter().fold((0f32, 0f32), |(l, h), v| (l.min(*v), h.max(*v)));
-                    out.push((lo, hi));
-                }
-            }
-            Err(_) => break,
-        }
-        s += n;
-    }
-    out
+    pass.run(total, 48_000 * 4, |s, n| {
+        let buf = src.audio_stream(stream, s as i64, n, sr).ok()?;
+        Some(buf.channels.first().map(|ch| ch.chunks(256).map(min_max).collect()).unwrap_or_default())
+    })
 }
 
-/// Whether the pool stands in the offline slate (silence) for `item`'s file: missing or made
-/// offline. An unreadable file may still have readable audio.
-fn shows_slate(pool: &filmcraft_engine::MediaPool, item: ItemId) -> bool {
+/// Min/max peaks (one per 256 samples at 48 kHz) of audio stream `stream` of `src`, `dur` long.
+#[cfg(test)]
+pub(super) fn source_peaks(src: &dyn filmcraft_media::MediaSource, stream: usize, dur: Tick) -> Vec<(f32, f32)> {
+    let mut pass = PeakPass::default();
+    source_pass(src, stream, dur, &mut pass);
+    pass.out
+}
+
+/// Whether the pool stands in the offline slate (silence) for media item `media`'s file: missing
+/// or made offline. An unreadable file may still have readable audio.
+fn shows_slate(pool: &filmcraft_engine::MediaPool, media: ItemId) -> bool {
     use filmcraft_render::offline::OfflineReason;
-    pool.offline_status(item).is_some_and(|o| matches!(o.reason, OfflineReason::Missing | OfflineReason::MadeOffline))
+    pool.offline_status(media).is_some_and(|o| matches!(o.reason, OfflineReason::Missing | OfflineReason::MadeOffline))
 }
 
 /// Waveform peaks of audio stream `stream` of `item` (a clip's `audio_stream`). An offline item
-/// has none (its slate is silence), peaks read while bytes were still loading are not kept, and
-/// an item whose file came back ([`filmcraft_engine::MediaPool::reopen`]) gets new ones.
+/// has none (its slate is silence; cached peaks stay hidden while it is offline), and an item
+/// whose file came back ([`filmcraft_engine::MediaPool::reopen`]) gets new ones. Offline state and
+/// reopen count are those of the media the item plays (a subclip's parent). A pass that had to
+/// wait for bytes (web) resumes where it stopped ([`PeakPass`]).
 pub(crate) fn request_peaks(app: &mut FilmcraftApp, item: ItemId, stream: usize) -> Option<Arc<Vec<(f32, f32)>>> {
     if app.session.project.sequence(item).is_some() {
         return request_sequence_peaks(app, item);
     }
     let pkey = (item, stream);
-    let generation = app.session.media.reopened(item);
+    let (media, made_offline) = app.session.project.resolve_media(item).map(|(id, m, _)| (id, m.offline))?;
+    // No source: try again on a later frame instead of leaving the item pending forever.
+    let earlier = filmcraft_media::pending::take();
+    let src = app.session.source(item);
+    let deferred = filmcraft_media::pending::take();
+    if earlier || deferred {
+        filmcraft_media::pending::mark();
+    }
+    let src = src?;
+    if made_offline || deferred || shows_slate(&app.session.media, media) {
+        return None;
+    }
+    let generation = app.session.media.reopened(media);
     {
         let mut cached = app.tl.peaks.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(p) = cached.get(&pkey) {
@@ -212,39 +290,33 @@ pub(crate) fn request_peaks(app: &mut FilmcraftApp, item: ItemId, stream: usize)
             cached.remove(&pkey);
         }
     }
-    // No source: try again on a later frame instead of leaving the item pending forever.
-    let earlier = filmcraft_media::pending::take();
-    let src = app.session.source(item);
-    let deferred = filmcraft_media::pending::take();
-    if earlier || deferred {
-        filmcraft_media::pending::mark();
-    }
-    let src = src?;
-    if deferred || shows_slate(&app.session.media, item) {
-        return None;
-    }
     {
         let mut pend = app.tl.peaks_pending.lock().unwrap_or_else(|e| e.into_inner());
         if pend.contains(&pkey) {
             return None;
         }
+        let parts = app.tl.peak_passes.lock().unwrap_or_else(|e| e.into_inner());
+        if parts.get(&pkey).is_some_and(|p| p.generation == generation && p.waiting()) {
+            return None;
+        }
         pend.push(pkey);
     }
-    let (peaks, gens, pending) = (app.tl.peaks.clone(), app.tl.peak_gens.clone(), app.tl.peaks_pending.clone());
+    let (peaks, gens, pending, passes) = (app.tl.peaks.clone(), app.tl.peak_gens.clone(), app.tl.peaks_pending.clone(), app.tl.peak_passes.clone());
     let pool = app.session.media.clone();
     let dur = src.info().duration;
     let run = move || {
-        let earlier = filmcraft_media::pending::take();
-        let out = source_peaks(&*src, stream, dur);
-        let deferred = filmcraft_media::pending::take();
-        if earlier || deferred {
-            filmcraft_media::pending::mark();
-        }
-        // not this file's waveform: a read that had to wait, a source that went offline meanwhile,
-        // or a file that came back while these were read
-        if !deferred && !shows_slate(&pool, item) && pool.reopened(item) == generation {
-            peaks.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, Arc::new(out));
-            gens.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, generation);
+        let mut pass =
+            passes.lock().unwrap_or_else(|e| e.into_inner()).remove(&pkey).filter(|p| p.generation == generation).unwrap_or_else(|| PeakPass::new(generation));
+        let done = source_pass(&*src, stream, dur, &mut pass);
+        // not this file's waveform: a source that went offline meanwhile, or a file that came back
+        // while these were read
+        if !shows_slate(&pool, media) && pool.reopened(media) == generation {
+            if done {
+                peaks.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, Arc::new(pass.out));
+                gens.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, generation);
+            } else {
+                passes.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, pass);
+            }
         }
         pending.lock().unwrap_or_else(|e| e.into_inner()).retain(|i| *i != pkey);
     };
@@ -313,6 +385,7 @@ mod tests {
         let mut s = Session::default();
         let r = s.execute("file.import", json!({"paths": [wav_path]})).unwrap();
         let item = ItemId(r["items"][0].as_u64().unwrap());
+        let sub = ItemId(s.execute("clip.makeSubclip", json!({"item": item.0, "startFrame": 0, "endFrame": 24})).unwrap()["item"].as_u64().unwrap());
         let seq = ItemId(s.execute("file.newSequence", json!({"name": "Cut", "fromItem": item.0})).unwrap()["sequence"].as_u64().unwrap());
         let path = root.join("p.fcproj").to_string_lossy().into_owned();
         s.execute("file.save", json!({"path": path})).unwrap();
@@ -322,6 +395,8 @@ mod tests {
         app.open_project_quietly(&path).unwrap();
         assert!(peaks_of(&mut app, item).is_none(), "a missing file has no waveform");
         assert!(app.tl.peaks.lock().unwrap().get(&(item, 0)).is_none(), "nor silent peaks kept for it");
+        assert!(peaks_of(&mut app, sub).is_none(), "nor for a subclip of it");
+        assert!(app.tl.peaks.lock().unwrap().get(&(sub, 0)).is_none());
         let silent = peaks_of(&mut app, seq).expect("the nested sequence mixes (silence)");
         assert!(loudest(&silent) < 1e-4);
 
@@ -329,6 +404,8 @@ mod tests {
         assert_eq!(filmcraft_engine::relink::attach(&mut app.session, &[wav_path]), vec![item]);
         let clip = peaks_of(&mut app, item).expect("the clip's waveform");
         assert!(loudest(&clip) > 0.3, "the file's peaks: {}", loudest(&clip));
+        let subclip = peaks_of(&mut app, sub).expect("the subclip's waveform");
+        assert!(loudest(&subclip) > 0.3, "the subclip follows its media: {}", loudest(&subclip));
         let mut mixed = 0.0;
         for _ in 0..200 {
             mixed = request_peaks(&mut app, seq, 0).map_or(0.0, |p| loudest(&p));
@@ -339,5 +416,126 @@ mod tests {
         }
         assert!(mixed > 0.3, "the nested sequence is mixed again with the file: {mixed}");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A project holding `tone.wav` (online) in `root`; returns (session, item, path).
+    fn online_wav(root: &std::path::Path) -> (Session, ItemId, String) {
+        let _ = std::fs::remove_dir_all(root);
+        std::fs::create_dir_all(root).unwrap();
+        let wav = root.join("tone.wav");
+        std::fs::write(&wav, tone_wav()).unwrap();
+        let path = wav.to_string_lossy().into_owned();
+        let mut s = Session::default();
+        let r = s.execute("file.import", json!({"paths": [path]})).unwrap();
+        (s, ItemId(r["items"][0].as_u64().unwrap()), path)
+    }
+
+    // Make Offline hides a cached waveform (an offline item has none); linking the file again
+    // shows it again.
+    #[test]
+    fn a_clip_made_offline_shows_no_waveform_until_it_is_back() {
+        let root = std::env::temp_dir().join(format!("fc-waveform-offline-{}", std::process::id()));
+        let (s, item, path) = online_wav(&root);
+        let mut app = FilmcraftApp::new(s);
+        assert!(loudest(&peaks_of(&mut app, item).expect("peaks")) > 0.3);
+        app.session.execute("media.makeOffline", json!({"items": [item.0]})).unwrap();
+        assert!(request_peaks(&mut app, item, 0).is_none(), "made offline: no waveform");
+        app.session.execute("media.relink", json!({"item": item.0, "path": path})).unwrap();
+        assert!(loudest(&peaks_of(&mut app, item).expect("back online: the waveform again")) > 0.3);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A source whose reads wait (web: bytes still being fetched) as `defer` says, counting reads.
+    struct Deferring {
+        info: filmcraft_media::MediaInfo,
+        reads: Arc<std::sync::Mutex<Vec<i64>>>,
+        defer: fn(&[i64], i64) -> bool,
+    }
+
+    impl filmcraft_media::MediaSource for Deferring {
+        fn info(&self) -> &filmcraft_media::MediaInfo {
+            &self.info
+        }
+        fn video_frame(&self, _req: filmcraft_media::FrameRequest) -> filmcraft_media::Result<Arc<filmcraft_frame::VideoFrame>> {
+            Err(filmcraft_media::MediaError::NoStream("video"))
+        }
+        fn audio(&self, start: i64, frames: usize, sample_rate: u32) -> filmcraft_media::Result<filmcraft_frame::AudioBuffer> {
+            self.audio_stream(0, start, frames, sample_rate)
+        }
+        fn audio_stream(&self, _stream: usize, start: i64, frames: usize, sample_rate: u32) -> filmcraft_media::Result<filmcraft_frame::AudioBuffer> {
+            let mut reads = self.reads.lock().unwrap();
+            let wait = (self.defer)(&reads, start);
+            reads.push(start);
+            if wait {
+                return Err(filmcraft_media::MediaError::Io(filmcraft_media::pending::would_block().to_string()));
+            }
+            Ok(filmcraft_frame::AudioBuffer { sample_rate, channels: vec![vec![0.5; frames]] })
+        }
+    }
+
+    /// `item` of a fresh project, its source replaced by a [`Deferring`] one `seconds` long.
+    fn deferring(seconds: i64, defer: fn(&[i64], i64) -> bool) -> (FilmcraftApp, ItemId, Arc<std::sync::Mutex<Vec<i64>>>) {
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!("fc-waveform-defer-{}-{n}", std::process::id()));
+        let (s, item, _) = online_wav(&root);
+        let reads = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let info = filmcraft_media::MediaInfo {
+            name: "long.mkv".into(),
+            kind: filmcraft_media::MediaKind::Movie,
+            duration: Tick(filmcraft_time::TICKS_PER_SECOND * seconds),
+            video: None,
+            audio_streams: Vec::new(),
+            container: "mkv".into(),
+            start_timecode: None,
+            file_size: None,
+        };
+        s.media.insert_keyed(item, String::new(), Arc::new(Deferring { info, reads: reads.clone(), defer }));
+        let _ = std::fs::remove_dir_all(&root);
+        (FilmcraftApp::new(s), item, reads)
+    }
+
+    /// Ask for `item`'s peaks every few milliseconds (frames) for up to `ms`.
+    fn poll(app: &mut FilmcraftApp, item: ItemId, ms: u64) -> Option<Arc<Vec<(f32, f32)>>> {
+        let end = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+        while std::time::Instant::now() < end {
+            if let Some(p) = request_peaks(app, item, 0) {
+                return Some(p);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        None
+    }
+
+    // A file whose bytes never come (every read waits) costs a bounded number of reads, spaced
+    // out, and then the peaks read so far (none) are kept: it is not read again every frame.
+    #[test]
+    fn waiting_reads_are_retried_a_bounded_number_of_times() {
+        let (mut app, item, reads) = deferring(60, |_, _| true);
+        let peaks = poll(&mut app, item, 3000).expect("the peaks so far are kept in the end");
+        assert!(peaks.is_empty());
+        assert_eq!(reads.lock().unwrap().len(), MAX_STALLS as usize, "one read per pass, {MAX_STALLS} passes");
+        for _ in 0..20 {
+            assert!(request_peaks(&mut app, item, 0).is_some());
+        }
+        assert_eq!(reads.lock().unwrap().len(), MAX_STALLS as usize, "and then never again");
+    }
+
+    // A file larger than the browser keeps (each chunk's bytes arrive only after a read asked for
+    // them) is read once through: a pass that had to wait resumes at its chunk instead of starting
+    // over, so no chunk is read again once it was read.
+    #[test]
+    fn a_pass_that_had_to_wait_resumes_where_it_stopped() {
+        // every chunk waits the first time it is asked for
+        let (mut app, item, reads) = deferring(60, |seen, start| !seen.contains(&start));
+        let peaks = poll(&mut app, item, 10_000).expect("the whole waveform");
+        assert_eq!(peaks.len(), 60 * 48_000 / 256, "all of it");
+        assert!(loudest(&peaks) > 0.4);
+        let reads = reads.lock().unwrap();
+        let chunks = 15; // 60 s in 4 s chunks
+        assert_eq!(reads.len(), 2 * chunks, "each chunk: one read that waited, one that read it");
+        for start in reads.iter() {
+            assert!(reads.iter().filter(|s| *s == start).count() <= 2, "chunk at {start} read again");
+        }
     }
 }
