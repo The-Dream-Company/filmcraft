@@ -399,6 +399,8 @@ fn apply(s: &mut Session, plans: Vec<Plan>, align_timecode: bool, label: &str) -
         s.media.allow(&p.cand.path);
     }
     for (item, path, src) in sources {
+        // another file now: what was read from the old one (waveforms) goes too
+        s.media.reopen(item);
         s.media.insert_file(item, &path, src);
     }
     let gone: Vec<ItemId> = plans.iter().map(|p| p.item).collect();

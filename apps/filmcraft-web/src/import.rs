@@ -134,7 +134,8 @@ pub async fn import_files(files: Vec<web_sys::File>) -> Value {
 
 /// Hand over the media of the open project (the host opened it first): each file is registered at
 /// `/files/<name>` and the project's items naming that path come online. Nothing is imported or
-/// probed here (the first frame that needs a file opens it): no bin item, no undo step. A path
+/// probed here (the first frame that needs a file opens it), but its bytes are prefetched as an
+/// import prefetches them: no bin item, no undo step. A path
 /// already registered keeps its file. Returns `{paths, errors, online}` (`online`: the item ids
 /// that came online).
 pub async fn attach_files(files: Vec<web_sys::File>) -> Value {
@@ -147,6 +148,9 @@ pub async fn attach_files(files: Vec<web_sys::File>) -> Value {
                 // a path already registered keeps its file, and its recovery copy
                 if added {
                     crate::recovery::keep_media(&path, &f);
+                    // as an import does: what the first frames and the waveform read is cached
+                    // before the items come online (a read that has to wait cuts a waveform short)
+                    prewarm(&path, f.size() as u64).await;
                     new_paths.push(path.clone());
                 }
                 paths.push(path);
