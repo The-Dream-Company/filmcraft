@@ -152,10 +152,11 @@ pub fn open_quietly(s: &mut Session, path: &str) -> Result<Value> {
     r
 }
 
-/// A host put files at `paths` (the web page's `attachFiles`): missing items whose path is there
-/// now come online. Nothing is imported and nothing is edited: no bin item, no undo step, the
-/// document, selection and playhead stay. Items made offline on purpose stay offline. Returns the
-/// items that came online.
+/// A host put new files at `paths` (the web page's `attachFiles`; a path it already had is not
+/// passed): missing items whose path is there now come online, and items whose proxy is one of
+/// those paths redraw from it. Nothing is imported and nothing is edited: no bin item, no undo
+/// step, the document, selection and playhead stay. Items made offline on purpose stay offline.
+/// Returns the items that came online.
 pub fn attach(s: &mut Session, paths: &[String]) -> Vec<ItemId> {
     for p in paths {
         s.media.allow(p);
@@ -163,11 +164,14 @@ pub fn attach(s: &mut Session, paths: &[String]) -> Vec<ItemId> {
     let was_missing = s.offline.missing.clone();
     let list = refresh(s);
     let back: Vec<ItemId> = was_missing.into_iter().filter(|i| !s.offline.missing.contains(i)).collect();
-    // drop the cached slate: the next frame opens the file
-    for item in &back {
+    let proxied =
+        s.project.items.values().filter(|it| it.as_media().is_some_and(|m| matches!(&m.proxy, Some(MediaRef::File { path }) if paths.contains(path))));
+    let changed: std::collections::BTreeSet<ItemId> = back.iter().copied().chain(proxied.map(|it| it.id)).collect();
+    // drop the cached slate: the next frame opens the file (or the proxy)
+    for item in &changed {
         s.media.reopen(*item);
     }
-    if !back.is_empty() {
+    if !changed.is_empty() {
         s.bump_view();
     }
     if !list.iter().any(|m| m.status == "missing") {

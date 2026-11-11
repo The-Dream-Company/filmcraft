@@ -586,22 +586,78 @@ fn attach_leaves_items_made_offline_offline() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-// What the host relies on: attaching to a clean project leaves the document byte for byte as it
-// was, the project unmodified and the history as it was.
+// What the host relies on: attaching to a clean project leaves the saved document (`file.saveCopy`,
+// open sequences and timeline views included) byte for byte as it was, the playhead where it was,
+// the project unmodified and the history as it was.
 #[test]
 fn attach_to_a_clean_project_changes_no_document_byte() {
     let root = tmp_dir("relink-attach-clean");
     let (path, items, files) = three_missing(&root);
     let mut s = open(&path);
     assert!(!s.is_dirty(), "setup: a clean project");
-    let doc = filmcraft_format::encode(&s.project, false);
-    let undo = s.history.undo.len();
+    s.set_playhead(s.sequence_rate().tick_of(5));
+    let copy = root.join("copy.fcproj").to_string_lossy().into_owned();
+    let save = |s: &mut Session| {
+        s.execute("file.saveCopy", json!({"path": copy})).unwrap();
+        std::fs::read(&copy).unwrap()
+    };
+    let doc = save(&mut s);
+    assert!(String::from_utf8_lossy(&doc).contains("\"view\""), "setup: the copy holds the view");
+    let (undo, playhead, open_sequences) = (s.history.undo.len(), s.playhead(), s.state.open_sequences.clone());
     put_back(&root, "a.mov");
     put_back(&root, "b.mov");
     assert_eq!(crate::relink::attach(&mut s, &files), vec![items[0], items[1]]);
-    assert_eq!(filmcraft_format::encode(&s.project, false), doc, "the document is untouched");
+    assert_eq!(save(&mut s), doc, "the saved document is untouched, view included");
+    assert_eq!(s.playhead(), playhead);
+    assert_eq!(s.state.open_sequences, open_sequences);
     assert!(!s.is_dirty(), "attach does not mark the project modified");
     assert_eq!(s.history.undo.len(), undo);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+// Proxies on, the original and its proxy both missing: attaching only the proxy file brings no item
+// online (the original is still missing), but the frames drawn offline must go, so the monitors
+// redraw from the proxy at the same playhead. Attaching nothing new changes nothing.
+#[test]
+fn attaching_only_the_proxy_redraws_from_it() {
+    let root = tmp_dir("relink-attach-proxy");
+    let media = root.join("Media");
+    std::fs::create_dir_all(&media).unwrap();
+    let (a, px) = (media.join("a.mov"), media.join("a_proxy.mov"));
+    make_movie(&a, DemoScene::Aurora, W, H, 12);
+    make_movie(&px, DemoScene::Dunes, W, H, 12);
+    let px_path = px.to_string_lossy().into_owned();
+    let (mut s, items, _) = session_with(&[&a]);
+    let (proxy, item) = (px_path.clone(), items[0]);
+    s.edit("proxy", move |p, _| {
+        p.item_mut(item).unwrap().as_media_mut().unwrap().proxy = Some(filmcraft_project::MediaRef::File { path: proxy });
+        Ok(())
+    })
+    .unwrap();
+    std::fs::create_dir_all(root.join("Project")).unwrap();
+    let path = root.join("Project").join("p.fcproj").to_string_lossy().into_owned();
+    s.execute("file.save", json!({"path": path})).unwrap();
+    s.media.set_use_proxies(true);
+    let proxy_picture = frame_rgba(&mut s, 3, 1.0).2;
+    drop(s);
+    std::fs::rename(&media, root.join("Stash")).unwrap();
+
+    let mut s = open(&path);
+    s.media.set_use_proxies(true);
+    let (w, h, px0) = frame_rgba(&mut s, 3, 1.0);
+    assert!(psnr(&px0, &slate_rgba8(w, h, "a.mov", OfflineReason::Missing)) > 40.0, "setup: the slate");
+    let (rev, playhead) = (s.revision, s.playhead());
+    put_back(&root, "a_proxy.mov");
+    assert!(crate::relink::attach(&mut s, std::slice::from_ref(&px_path)).is_empty(), "the original is still missing");
+    assert_eq!(s.media.reopened(items[0]), 1, "frame caches of the item go");
+    assert!(s.revision > rev, "the monitors redraw");
+    assert_eq!(s.playhead(), playhead);
+    let img = s.render_program(1.0).unwrap();
+    assert_eq!(img.over_black_rgba8(), proxy_picture, "the frame at the same playhead comes from the proxy");
+    // the same file again (the page passes no new path): nothing to redraw
+    let rev = s.revision;
+    assert!(crate::relink::attach(&mut s, &[]).is_empty());
+    assert_eq!((s.revision, s.media.reopened(items[0])), (rev, 1));
     let _ = std::fs::remove_dir_all(&root);
 }
 

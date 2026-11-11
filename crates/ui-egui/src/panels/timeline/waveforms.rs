@@ -94,7 +94,11 @@ fn request_sequence_peaks(app: &mut FilmcraftApp, item: ItemId) -> Option<Arc<Ve
     let key = match app.tl.seq_keys_seen.get(&item) {
         Some(&(rev, key)) if rev == revision => key,
         _ => {
-            let key = sequence_audio_key(&app.session.project, item);
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            // and again when media came back (`relink::attach`): it was mixed in as silence
+            (sequence_audio_key(&app.session.project, item), app.session.media.reopened_total()).hash(&mut h);
+            let key = h.finish();
             app.tl.seq_keys_seen.insert(item, (revision, key));
             key
         }
@@ -117,6 +121,7 @@ fn request_sequence_peaks(app: &mut FilmcraftApp, item: ItemId) -> Option<Arc<Ve
     let provider = app.session.media.provider(project.clone(), app.session.services.clone());
     let run = move || {
         // a panic in the mix must not take the app down with it, nor leave the item pending for good
+        let earlier = filmcraft_media::pending::take();
         let mixed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let seq = project.sequence(item)?;
             let sr = seq.settings.sample_rate.max(1);
@@ -138,7 +143,14 @@ fn request_sequence_peaks(app: &mut FilmcraftApp, item: ItemId) -> Option<Arc<Ve
             }
             Some(out)
         }));
-        if let Ok(Some(out)) = mixed {
+        // a read that had to wait (web) mixed silence in: mix again on a later frame
+        let deferred = filmcraft_media::pending::take();
+        if earlier || deferred {
+            filmcraft_media::pending::mark();
+        }
+        if let Ok(Some(out)) = mixed
+            && !deferred
+        {
             peaks.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, Arc::new(out));
             keys.lock().unwrap_or_else(|e| e.into_inner()).insert(item, key);
         }
@@ -175,17 +187,42 @@ pub(super) fn source_peaks(src: &dyn filmcraft_media::MediaSource, stream: usize
     out
 }
 
-/// Waveform peaks of audio stream `stream` of `item` (a clip's `audio_stream`).
+/// Whether the pool stands in the offline slate (silence) for `item`'s file: missing or made
+/// offline. An unreadable file may still have readable audio.
+fn shows_slate(pool: &filmcraft_engine::MediaPool, item: ItemId) -> bool {
+    use filmcraft_render::offline::OfflineReason;
+    pool.offline_status(item).is_some_and(|o| matches!(o.reason, OfflineReason::Missing | OfflineReason::MadeOffline))
+}
+
+/// Waveform peaks of audio stream `stream` of `item` (a clip's `audio_stream`). An offline item
+/// has none (its slate is silence), peaks read while bytes were still loading are not kept, and
+/// an item whose file came back ([`filmcraft_engine::MediaPool::reopen`]) gets new ones.
 pub(crate) fn request_peaks(app: &mut FilmcraftApp, item: ItemId, stream: usize) -> Option<Arc<Vec<(f32, f32)>>> {
     if app.session.project.sequence(item).is_some() {
         return request_sequence_peaks(app, item);
     }
     let pkey = (item, stream);
-    if let Some(p) = app.tl.peaks.lock().unwrap_or_else(|e| e.into_inner()).get(&pkey) {
-        return Some(p.clone());
+    let generation = app.session.media.reopened(item);
+    {
+        let mut cached = app.tl.peaks.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(p) = cached.get(&pkey) {
+            if app.tl.peak_gens.lock().unwrap_or_else(|e| e.into_inner()).get(&pkey) == Some(&generation) {
+                return Some(p.clone());
+            }
+            cached.remove(&pkey);
+        }
     }
     // No source: try again on a later frame instead of leaving the item pending forever.
-    let src = app.session.source(item)?;
+    let earlier = filmcraft_media::pending::take();
+    let src = app.session.source(item);
+    let deferred = filmcraft_media::pending::take();
+    if earlier || deferred {
+        filmcraft_media::pending::mark();
+    }
+    let src = src?;
+    if deferred || shows_slate(&app.session.media, item) {
+        return None;
+    }
     {
         let mut pend = app.tl.peaks_pending.lock().unwrap_or_else(|e| e.into_inner());
         if pend.contains(&pkey) {
@@ -193,12 +230,22 @@ pub(crate) fn request_peaks(app: &mut FilmcraftApp, item: ItemId, stream: usize)
         }
         pend.push(pkey);
     }
-    let peaks = app.tl.peaks.clone();
-    let pending = app.tl.peaks_pending.clone();
+    let (peaks, gens, pending) = (app.tl.peaks.clone(), app.tl.peak_gens.clone(), app.tl.peaks_pending.clone());
+    let pool = app.session.media.clone();
     let dur = src.info().duration;
     let run = move || {
+        let earlier = filmcraft_media::pending::take();
         let out = source_peaks(&*src, stream, dur);
-        peaks.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, Arc::new(out));
+        let deferred = filmcraft_media::pending::take();
+        if earlier || deferred {
+            filmcraft_media::pending::mark();
+        }
+        // not this file's waveform: a read that had to wait, a source that went offline meanwhile,
+        // or a file that came back while these were read
+        if !deferred && !shows_slate(&pool, item) && pool.reopened(item) == generation {
+            peaks.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, Arc::new(out));
+            gens.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, generation);
+        }
         pending.lock().unwrap_or_else(|e| e.into_inner()).retain(|i| *i != pkey);
     };
     #[cfg(not(target_arch = "wasm32"))]
@@ -206,4 +253,91 @@ pub(crate) fn request_peaks(app: &mut FilmcraftApp, item: ItemId, stream: usize)
     #[cfg(target_arch = "wasm32")]
     run();
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use filmcraft_engine::Session;
+    use serde_json::json;
+
+    /// 2 s of a 440 Hz tone, PCM16 mono 48 kHz.
+    fn tone_wav() -> Vec<u8> {
+        let (rate, samples) = (48_000u32, 96_000u32);
+        let mut b = Vec::new();
+        b.extend_from_slice(b"RIFF");
+        b.extend_from_slice(&(36 + samples * 2).to_le_bytes());
+        b.extend_from_slice(b"WAVEfmt ");
+        b.extend_from_slice(&16u32.to_le_bytes());
+        b.extend_from_slice(&1u16.to_le_bytes());
+        b.extend_from_slice(&1u16.to_le_bytes());
+        b.extend_from_slice(&rate.to_le_bytes());
+        b.extend_from_slice(&(rate * 2).to_le_bytes());
+        b.extend_from_slice(&2u16.to_le_bytes());
+        b.extend_from_slice(&16u16.to_le_bytes());
+        b.extend_from_slice(b"data");
+        b.extend_from_slice(&(samples * 2).to_le_bytes());
+        for i in 0..samples {
+            let v = (12_000.0 * (2.0 * std::f64::consts::PI * 440.0 * i as f64 / rate as f64).sin()) as i16;
+            b.extend_from_slice(&v.to_le_bytes());
+        }
+        b
+    }
+
+    fn loudest(p: &[(f32, f32)]) -> f32 {
+        p.iter().fold(0f32, |m, (a, b)| m.max(a.abs()).max(b.abs()))
+    }
+
+    /// Peaks of `item`, waiting for the background job (None when none come).
+    fn peaks_of(app: &mut FilmcraftApp, item: ItemId) -> Option<Arc<Vec<(f32, f32)>>> {
+        for _ in 0..200 {
+            if let Some(p) = request_peaks(app, item, 0) {
+                return Some(p);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        None
+    }
+
+    // T3 (Filmsquare): a quiet-opened project gets its audio afterwards (`relink::attach`). The
+    // waveform drawn while the file was missing (the slate is silence) must not stay: the clip's
+    // peaks after attach are the file's, and so are the nested sequence's.
+    #[test]
+    fn waveforms_after_attach_are_the_files_not_the_silence() {
+        let root = std::env::temp_dir().join(format!("fc-waveform-attach-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("Media")).unwrap();
+        let wav = root.join("Media").join("tone.wav");
+        std::fs::write(&wav, tone_wav()).unwrap();
+        let wav_path = wav.to_string_lossy().into_owned();
+        let mut s = Session::default();
+        let r = s.execute("file.import", json!({"paths": [wav_path]})).unwrap();
+        let item = ItemId(r["items"][0].as_u64().unwrap());
+        let seq = ItemId(s.execute("file.newSequence", json!({"name": "Cut", "fromItem": item.0})).unwrap()["sequence"].as_u64().unwrap());
+        let path = root.join("p.fcproj").to_string_lossy().into_owned();
+        s.execute("file.save", json!({"path": path})).unwrap();
+        std::fs::rename(root.join("Media"), root.join("Stash")).unwrap();
+
+        let mut app = FilmcraftApp::new(Session::default());
+        app.open_project_quietly(&path).unwrap();
+        assert!(peaks_of(&mut app, item).is_none(), "a missing file has no waveform");
+        assert!(app.tl.peaks.lock().unwrap().get(&(item, 0)).is_none(), "nor silent peaks kept for it");
+        let silent = peaks_of(&mut app, seq).expect("the nested sequence mixes (silence)");
+        assert!(loudest(&silent) < 1e-4);
+
+        std::fs::rename(root.join("Stash"), root.join("Media")).unwrap();
+        assert_eq!(filmcraft_engine::relink::attach(&mut app.session, &[wav_path]), vec![item]);
+        let clip = peaks_of(&mut app, item).expect("the clip's waveform");
+        assert!(loudest(&clip) > 0.3, "the file's peaks: {}", loudest(&clip));
+        let mut mixed = 0.0;
+        for _ in 0..200 {
+            mixed = request_peaks(&mut app, seq, 0).map_or(0.0, |p| loudest(&p));
+            if mixed > 0.3 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(mixed > 0.3, "the nested sequence is mixed again with the file: {mixed}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

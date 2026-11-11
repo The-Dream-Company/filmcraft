@@ -140,20 +140,21 @@ pub async fn import_files(files: Vec<web_sys::File>) -> Value {
 pub async fn attach_files(files: Vec<web_sys::File>) -> Value {
     let mut errors = Vec::new();
     let mut paths = Vec::new();
+    let mut new_paths = Vec::new();
     for f in files {
         match fs::attach_blob(&f.name(), f.clone().into()) {
             Ok((path, added)) => {
                 // a path already registered keeps its file, and its recovery copy
                 if added {
                     crate::recovery::keep_media(&path, &f);
+                    new_paths.push(path.clone());
                 }
                 paths.push(path);
             }
             Err(e) => errors.push(json!(e)),
         }
     }
-    let p = paths.clone();
-    let online = on_ui(move |w, _| filmcraft_engine::relink::attach(&mut w.app.session, &p)).await;
+    let online = on_ui(move |w, _| filmcraft_engine::relink::attach(&mut w.app.session, &new_paths)).await;
     json!({"paths": paths, "errors": errors, "online": online.iter().map(|i| i.0).collect::<Vec<_>>()})
 }
 

@@ -6,7 +6,7 @@
 //
 // Gates: `filmcraftLoad.can`; a normal open still asks (Link Media, missing-media toast) and a quiet
 // one does neither; attach brings the item online with no bin item, no undo step and the same
-// document (`file.saveCopy`, as the host's snapshot reads it, `view` aside); a name with a path
+// document (`file.saveCopy` bytes, as the host's snapshot reads them, `view` included); a name with a path
 // separator is refused; attaching a registered name again keeps the first file. Generated WAVs
 // only. Prints a JSON report; exits non-zero on failure, including any Rust panic.
 import { spawn } from "node:child_process";
@@ -100,10 +100,15 @@ async function shot(name) {
 const file = (bytes, name) => `new File([Uint8Array.from(atob(${JSON.stringify(Buffer.from(bytes).toString("base64"))}), c => c.charCodeAt(0))], ${JSON.stringify(name)})`;
 const linkMedia = () => js("filmcraft.request('ui.elements', {prefix: 'linkMedia.'}).then(a => a.length)");
 const missingToasts = () => js("filmcraft.execute('events.list').then(l => l.entries.filter(e => /media file\\(s\\) are missing/.test(e.message)).length)");
-// the document as the host's snapshot reads it (file.saveCopy + readFile), without `view`
-const snapshot = () => js(`filmcraft.execute("file.saveCopy", {path: "/projects/snapshot.fcproj"})
-  .then(() => filmcraft.readFile("/projects/snapshot.fcproj"))
-  .then(u => { const d = JSON.parse(new TextDecoder().decode(u)); delete d.view; return JSON.stringify(d); })`);
+// the document as the host's snapshot reads it (file.saveCopy + readFile): every byte, `view` included,
+// with playback stopped and the UI settled first
+const snapshot = async () => {
+  await js("filmcraft.request('ui.playback', {action: 'stop'})");
+  await sleep(500);
+  return js(`filmcraft.execute("file.saveCopy", {path: "/projects/snapshot.fcproj"})
+    .then(() => filmcraft.readFile("/projects/snapshot.fcproj"))
+    .then(u => { let s = ""; for (const b of u) s += String.fromCharCode(b); return btoa(s); })`);
+};
 const readHash = (path) => js(`filmcraft.readFile(${JSON.stringify(path)}).then(u => crypto.subtle.digest("SHA-256", u)).then(h => Array.from(new Uint8Array(h), b => b.toString(16).padStart(2, "0")).join(""))`);
 
 const report = { gates: {} };
@@ -155,7 +160,10 @@ try {
   g.onlineAfter = report.after.length === 1 && report.after[0].status === "online";
   g.noBinItem = report.after.length === report.before.length;
   g.noUndoStep = JSON.stringify(historyBefore) === JSON.stringify(await js('filmcraft.execute("history.list")'));
-  g.sameDocument = docBefore === await snapshot();
+  const docAfter = await snapshot();
+  g.sameDocument = docBefore === docAfter;
+  g.documentHasView = JSON.parse(Buffer.from(docBefore, "base64").toString()).view !== undefined;
+  if (!g.sameDocument) report.documents = { before: Buffer.from(docBefore, "base64").toString(), after: Buffer.from(docAfter, "base64").toString() };
 
   // the same name again, other bytes: the first file stays
   report.again = await js(`filmcraft.attachFiles([${file(media.b, "clip.wav")}])`);

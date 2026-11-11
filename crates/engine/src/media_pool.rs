@@ -200,6 +200,11 @@ impl MediaPool {
         self.reopened.read().unwrap_or_else(PoisonError::into_inner).get(&item).copied().unwrap_or(0)
     }
 
+    /// How often [`Self::reopen`] dropped any item's source (what a mix of several items keys on).
+    pub fn reopened_total(&self) -> u64 {
+        self.reopened.read().unwrap_or_else(PoisonError::into_inner).values().fold(0u64, |a, n| a.wrapping_add(*n))
+    }
+
     /// Record the media and proxy paths of `p`, loaded from the document at `document` (None: one
     /// without a file), as stored paths: they are opened only as [`crate::doc_path::resolve`]
     /// allows. A path already recorded keeps the document it came from first.

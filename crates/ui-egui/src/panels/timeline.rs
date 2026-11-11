@@ -99,6 +99,9 @@ pub struct TlState {
     snap_x: Option<f32>,
     pub peaks: Arc<Mutex<HashMap<PeakKey, Arc<Vec<(f32, f32)>>>>>,
     peaks_pending: Arc<Mutex<Vec<PeakKey>>>,
+    /// The media pool's reopen count of the item each cached peak list was made at
+    /// ([`filmcraft_engine::MediaPool::reopened`]): a file that came back gets new peaks.
+    peak_gens: Arc<Mutex<HashMap<PeakKey, u64>>>,
     /// Nested sequences have waveforms too, of their mix. Unlike media a sequence changes: this is
     /// the content key (see [`sequence_audio_key`]) the cached peaks of each sequence were made
     /// from, and the key worked out for the session revision last seen.
@@ -125,6 +128,7 @@ impl TlState {
     pub fn reset_media_caches(&mut self) {
         self.peaks = Default::default();
         self.peaks_pending = Default::default();
+        self.peak_gens = Default::default();
         self.seq_peak_keys = Default::default();
         self.seq_keys_seen.clear();
         self.peak_max.clear();
