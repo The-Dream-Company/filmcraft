@@ -711,3 +711,29 @@ fn attach_reopens_an_item_an_earlier_refresh_already_brought_online() {
     assert_eq!(s.media.reopened(items[0]), reopened + 1, "but it redraws from the file");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+// An item made offline on purpose stays as it is when its proxy file is attached: no reopen, so
+// what it still shows (its waveform) is kept.
+#[test]
+fn attaching_the_proxy_of_an_item_made_offline_leaves_it() {
+    let root = tmp_dir("relink-attach-offline-proxy");
+    let (path, items, _) = three_missing(&root);
+    let mut s = open(&path);
+    let proxy = root.join("Stash").join("a_proxy.mov");
+    make_movie(&proxy, DemoScene::Dunes, W, H, 12);
+    let proxy_path = proxy.to_string_lossy().into_owned();
+    let pp = proxy_path.clone();
+    let item = items[0];
+    s.edit("offline a, with a proxy", move |p, _| {
+        let m = p.item_mut(item).unwrap().as_media_mut().unwrap();
+        m.offline = true;
+        m.proxy = Some(filmcraft_project::MediaRef::File { path: pp });
+        Ok(())
+    })
+    .unwrap();
+    let (reopened, rev) = (s.media.reopened(items[0]), s.revision);
+    assert!(crate::relink::attach(&mut s, &[proxy_path]).is_empty());
+    assert_eq!(s.media.reopened(items[0]), reopened, "made offline on purpose: not reopened");
+    assert_eq!(s.revision, rev, "nothing to redraw");
+    let _ = std::fs::remove_dir_all(&root);
+}

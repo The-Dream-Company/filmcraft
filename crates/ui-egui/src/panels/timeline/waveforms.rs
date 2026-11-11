@@ -91,6 +91,8 @@ fn sequence_audio_key(project: &filmcraft_project::Project, item: ItemId) -> u64
 /// its redo change it by themselves. No allocation.
 fn file_validity(project: &filmcraft_project::Project, pool: &filmcraft_engine::MediaPool, item: ItemId) -> u64 {
     use std::hash::{Hash, Hasher};
+    #[cfg(test)]
+    tests::VALIDITY_CALLS.with(|n| n.set(n.get() + 1));
     let mut h = std::collections::hash_map::DefaultHasher::new();
     if let Some((media, m, _)) = project.resolve_media(item) {
         pool.reopened(media).hash(&mut h);
@@ -102,15 +104,23 @@ fn file_validity(project: &filmcraft_project::Project, pool: &filmcraft_engine::
 }
 
 /// [`file_validity`] of every clip on sequence `item`'s audio tracks, nested sequences followed as
-/// deep as `audio_segments` hashes them (8 levels).
-fn sequence_files(project: &filmcraft_project::Project, pool: &filmcraft_engine::MediaPool, item: ItemId, depth: u32, h: &mut impl std::hash::Hasher) {
+/// deep as `audio_segments` hashes them (8 levels). Each sequence is visited once, nearest first
+/// (what it contributes does not depend on how often it is placed); muted tracks are included, so
+/// the key never misses a file that is mixed.
+fn sequence_files(project: &filmcraft_project::Project, pool: &filmcraft_engine::MediaPool, item: ItemId, h: &mut impl std::hash::Hasher) {
     use std::hash::Hash;
-    let Some(seq) = project.sequence(item).filter(|_| depth <= 8) else { return };
-    for it in seq.audio_tracks.iter().flat_map(|tr| &tr.items) {
-        if project.sequence(it.item).is_some() {
-            sequence_files(project, pool, it.item, depth + 1, h);
-        } else {
-            file_validity(project, pool, it.item).hash(h);
+    let mut seen = std::collections::HashSet::from([item]);
+    let mut queue = std::collections::VecDeque::from([(item, 0u32)]);
+    while let Some((id, depth)) = queue.pop_front() {
+        let Some(seq) = project.sequence(id) else { continue };
+        for it in seq.audio_tracks.iter().flat_map(|tr| &tr.items) {
+            if project.sequence(it.item).is_some() {
+                if depth < 8 && seen.insert(it.item) {
+                    queue.push_back((it.item, depth + 1));
+                }
+            } else {
+                file_validity(project, pool, it.item).hash(h);
+            }
         }
     }
 }
@@ -127,7 +137,7 @@ fn request_sequence_peaks(app: &mut FilmcraftApp, item: ItemId) -> Option<Arc<Ve
             let mut h = std::collections::hash_map::DefaultHasher::new();
             // and again when one of its own files came back (`relink::attach`): it was mixed in as silence
             sequence_audio_key(&app.session.project, item).hash(&mut h);
-            sequence_files(&app.session.project, &app.session.media, item, 0, &mut h);
+            sequence_files(&app.session.project, &app.session.media, item, &mut h);
             let key = h.finish();
             app.tl.seq_keys_seen.insert(item, (revision, key));
             key
@@ -387,20 +397,62 @@ mod tests {
         let mut app = FilmcraftApp::new(Session::default());
         app.open_project_quietly(&path).unwrap();
         assert!(settles(&mut app, seq, |_| true) < 1e-4, "X missing: silence");
-        let before = request_peaks(&mut app, seq, 0).unwrap();
+        let key = |app: &FilmcraftApp| app.tl.seq_keys_seen.get(&seq).copied();
+        let (rev0, key0) = key(&app).unwrap();
 
         std::fs::create_dir_all(root.join("Media")).unwrap();
         std::fs::rename(root.join("Stash").join("y.wav"), &y).unwrap();
         assert_eq!(filmcraft_engine::relink::attach(&mut app.session, std::slice::from_ref(&y_path)).len(), 1);
-        for _ in 0..20 {
-            let now = request_peaks(&mut app, seq, 0).unwrap();
-            assert!(Arc::ptr_eq(&now, &before), "Y is not in the sequence: no mix again");
-            std::thread::sleep(std::time::Duration::from_millis(5));
-        }
+        request_peaks(&mut app, seq, 0);
+        let (rev1, key1) = key(&app).unwrap();
+        assert_ne!(rev1, rev0, "setup: the key was worked out again after the attach");
+        assert_eq!(key1, key0, "Y is not in the sequence: same key, no mix again");
 
         std::fs::rename(root.join("Stash").join("x.wav"), &x).unwrap();
         assert_eq!(filmcraft_engine::relink::attach(&mut app.session, &[x_path]).len(), 1);
+        request_peaks(&mut app, seq, 0);
+        assert_ne!(key(&app).unwrap().1, key0, "X is: a new key");
         settles(&mut app, seq, |l| l > 0.3);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    thread_local! {
+        pub(super) static VALIDITY_CALLS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    }
+
+    // Nine sequences, each holding ten placements of the next one (a muted track among them), the
+    // last ten of one file: the walk visits each sequence once instead of 10^9 placements.
+    #[test]
+    fn the_nested_walk_visits_each_sequence_once() {
+        let root = tmp("walk");
+        let wav = root.join("tone.wav");
+        std::fs::write(&wav, tone_wav(12_000.0)).unwrap();
+        let mut s = Session::default();
+        let r = s.execute("file.import", json!({"paths": [wav.to_string_lossy()]})).unwrap();
+        let media = ItemId(r["items"][0].as_u64().unwrap());
+        let mut p = (*s.project).clone();
+        let rate = filmcraft_time::FrameRate::FPS_24;
+        let settings = filmcraft_project::SequenceSettings { frame_rate: rate, ..Default::default() };
+        let mut inner = media;
+        for level in 0..9 {
+            let seq = p.new_sequence(&format!("L{level}"), settings.clone(), 0, 2, None);
+            let range = filmcraft_time::TimeRange::new(Tick::ZERO, rate.tick_of(24));
+            for n in 0..10 {
+                let it = p.make_track_item(inner, filmcraft_project::TrackKind::Audio, rate.tick_of(24 * n), range, rate).unwrap();
+                let track = (n % 2) as usize;
+                p.sequence_mut(seq).unwrap().audio_tracks[track].items.push(it);
+            }
+            p.sequence_mut(seq).unwrap().audio_tracks[1].muted = true;
+            inner = seq;
+        }
+        let top = inner;
+        VALIDITY_CALLS.with(|n| n.set(0));
+        let t0 = std::time::Instant::now();
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        sequence_files(&p, &s.media, top, &mut h);
+        let calls = VALIDITY_CALLS.with(|n| n.get());
+        assert_eq!(calls, 10, "the file's ten placements in the innermost sequence, once");
+        assert!(t0.elapsed() < std::time::Duration::from_millis(500), "{:?}", t0.elapsed());
         let _ = std::fs::remove_dir_all(&root);
     }
 }

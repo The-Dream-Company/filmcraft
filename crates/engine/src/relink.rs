@@ -166,7 +166,7 @@ pub fn attach(s: &mut Session, paths: &[String]) -> Vec<ItemId> {
     let list = refresh(s);
     let back: Vec<ItemId> = was_missing.into_iter().filter(|i| !s.offline.missing.contains(i)).collect();
     let on = |r: Option<&MediaRef>| matches!(r, Some(MediaRef::File { path }) if paths.contains(path));
-    let uses = s.project.items.values().filter(|it| it.as_media().is_some_and(|m| (!m.offline && on(Some(&m.media))) || on(m.proxy.as_ref())));
+    let uses = s.project.items.values().filter(|it| it.as_media().is_some_and(|m| !m.offline && (on(Some(&m.media)) || on(m.proxy.as_ref()))));
     let changed: std::collections::BTreeSet<ItemId> = back.iter().copied().chain(uses.map(|it| it.id)).collect();
     // drop the cached slate: the next frame opens the file (or the proxy)
     for item in &changed {
