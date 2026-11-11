@@ -99,8 +99,8 @@ pub struct TlState {
     snap_x: Option<f32>,
     pub peaks: Arc<Mutex<HashMap<PeakKey, Arc<Vec<(f32, f32)>>>>>,
     peaks_pending: Arc<Mutex<Vec<PeakKey>>>,
-    /// The media pool's reopen count of the item's media each cached peak list was read at
-    /// ([`filmcraft_engine::MediaPool::reopened`]): a file that came back gets new peaks.
+    /// What each cached peak list was read from (`waveforms::file_validity`: the file the item's
+    /// media points at and its reopen count): another file, or one that came back, gets new peaks.
     peak_gens: Arc<Mutex<HashMap<PeakKey, u64>>>,
     /// Nested sequences have waveforms too, of their mix. Unlike media a sequence changes: this is
     /// the content key (see [`sequence_audio_key`]) the cached peaks of each sequence were made

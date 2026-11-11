@@ -153,10 +153,11 @@ pub fn open_quietly(s: &mut Session, path: &str) -> Result<Value> {
 }
 
 /// A host put new files at `paths` (the web page's `attachFiles`; a path it already had is not
-/// passed): missing items whose path is there now come online, and items whose proxy is one of
-/// those paths redraw from it. Nothing is imported and nothing is edited: no bin item, no undo
-/// step, the document, selection and playhead stay. Items made offline on purpose stay offline.
-/// Returns the items that came online.
+/// passed): missing items whose path is there now come online, and every item whose file or proxy
+/// is one of those paths redraws from it, even one an earlier refresh already brought online (a
+/// file whose bytes were still on their way). Nothing is imported and nothing is edited: no bin
+/// item, no undo step, the document, selection and playhead stay. Items made offline on purpose
+/// stay offline. Returns the items that came online.
 pub fn attach(s: &mut Session, paths: &[String]) -> Vec<ItemId> {
     for p in paths {
         s.media.allow(p);
@@ -164,9 +165,9 @@ pub fn attach(s: &mut Session, paths: &[String]) -> Vec<ItemId> {
     let was_missing = s.offline.missing.clone();
     let list = refresh(s);
     let back: Vec<ItemId> = was_missing.into_iter().filter(|i| !s.offline.missing.contains(i)).collect();
-    let proxied =
-        s.project.items.values().filter(|it| it.as_media().is_some_and(|m| matches!(&m.proxy, Some(MediaRef::File { path }) if paths.contains(path))));
-    let changed: std::collections::BTreeSet<ItemId> = back.iter().copied().chain(proxied.map(|it| it.id)).collect();
+    let on = |r: Option<&MediaRef>| matches!(r, Some(MediaRef::File { path }) if paths.contains(path));
+    let uses = s.project.items.values().filter(|it| it.as_media().is_some_and(|m| (!m.offline && on(Some(&m.media))) || on(m.proxy.as_ref())));
+    let changed: std::collections::BTreeSet<ItemId> = back.iter().copied().chain(uses.map(|it| it.id)).collect();
     // drop the cached slate: the next frame opens the file (or the proxy)
     for item in &changed {
         s.media.reopen(*item);
@@ -399,8 +400,6 @@ fn apply(s: &mut Session, plans: Vec<Plan>, align_timecode: bool, label: &str) -
         s.media.allow(&p.cand.path);
     }
     for (item, path, src) in sources {
-        // another file now: what was read from the old one (waveforms) goes too
-        s.media.reopen(item);
         s.media.insert_file(item, &path, src);
     }
     let gone: Vec<ItemId> = plans.iter().map(|p| p.item).collect();

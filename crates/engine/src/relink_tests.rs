@@ -695,3 +695,19 @@ fn quiet_open_neither_prompts_nor_toasts_and_a_failed_one_changes_nothing() {
     assert_eq!((s.offline.prompt, s.revision, s.offline.quiet), (prompt, rev, false));
     let _ = std::fs::remove_dir_all(&root);
 }
+
+// Two overlapping attaches of one name (the page): the first registers the file and is still
+// fetching its bytes, the second finds it registered, passes no new path, and its refresh brings
+// the item online early. When the first one finishes, the item must still redraw from the file.
+#[test]
+fn attach_reopens_an_item_an_earlier_refresh_already_brought_online() {
+    let root = tmp_dir("relink-attach-early");
+    let (path, items, files) = three_missing(&root);
+    let mut s = open(&path);
+    put_back(&root, "a.mov");
+    assert!(crate::relink::attach(&mut s, &[]).contains(&items[0]), "setup: online by the second call's refresh");
+    let reopened = s.media.reopened(items[0]);
+    assert!(crate::relink::attach(&mut s, &files[..1]).is_empty(), "nothing comes online in this call");
+    assert_eq!(s.media.reopened(items[0]), reopened + 1, "but it redraws from the file");
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -86,6 +86,35 @@ fn sequence_audio_key(project: &filmcraft_project::Project, item: ItemId) -> u64
     h.finish()
 }
 
+/// What a media item's peaks are read from: the file its media (a subclip's parent) points at, and
+/// how often that file came back ([`filmcraft_engine::MediaPool::reopen`]). A relink, its undo and
+/// its redo change it by themselves. No allocation.
+fn file_validity(project: &filmcraft_project::Project, pool: &filmcraft_engine::MediaPool, item: ItemId) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    if let Some((media, m, _)) = project.resolve_media(item) {
+        pool.reopened(media).hash(&mut h);
+        if let filmcraft_project::MediaRef::File { path } = &m.media {
+            path.hash(&mut h);
+        }
+    }
+    h.finish()
+}
+
+/// [`file_validity`] of every clip on sequence `item`'s audio tracks, nested sequences followed as
+/// deep as `audio_segments` hashes them (8 levels).
+fn sequence_files(project: &filmcraft_project::Project, pool: &filmcraft_engine::MediaPool, item: ItemId, depth: u32, h: &mut impl std::hash::Hasher) {
+    use std::hash::Hash;
+    let Some(seq) = project.sequence(item).filter(|_| depth <= 8) else { return };
+    for it in seq.audio_tracks.iter().flat_map(|tr| &tr.items) {
+        if project.sequence(it.item).is_some() {
+            sequence_files(project, pool, it.item, depth + 1, h);
+        } else {
+            file_validity(project, pool, it.item).hash(h);
+        }
+    }
+}
+
 /// Waveform peaks of a nested sequence's mix, in the same form as a media item's (min, max per
 /// 256 samples at 48 kHz). They are mixed in the background, and again whenever the sequence's
 /// sound changes; until the new ones are ready the old ones stay on show.
@@ -96,8 +125,9 @@ fn request_sequence_peaks(app: &mut FilmcraftApp, item: ItemId) -> Option<Arc<Ve
         _ => {
             use std::hash::{Hash, Hasher};
             let mut h = std::collections::hash_map::DefaultHasher::new();
-            // and again when media came back (`relink::attach`): it was mixed in as silence
-            (sequence_audio_key(&app.session.project, item), app.session.media.reopened_total()).hash(&mut h);
+            // and again when one of its own files came back (`relink::attach`): it was mixed in as silence
+            sequence_audio_key(&app.session.project, item).hash(&mut h);
+            sequence_files(&app.session.project, &app.session.media, item, 0, &mut h);
             let key = h.finish();
             app.tl.seq_keys_seen.insert(item, (revision, key));
             key
@@ -185,9 +215,9 @@ pub(crate) fn request_peaks(app: &mut FilmcraftApp, item: ItemId, stream: usize)
         return request_sequence_peaks(app, item);
     }
     let pkey = (item, stream);
-    // Peaks are of the file the item's media (a subclip's parent) had when they were read: a file
-    // that came back or was relinked (`MediaPool::reopen`) gets new ones.
-    let generation = app.session.project.resolve_media(item).map_or(0, |(media, _, _)| app.session.media.reopened(media));
+    // Peaks are of the file the item's media (a subclip's parent) pointed at when they were read: a
+    // file that came back (`MediaPool::reopen`) or another file (relink, undo) gets new ones.
+    let generation = file_validity(&app.session.project, &app.session.media, item);
     {
         let mut cached = app.tl.peaks.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(p) = cached.get(&pkey) {
@@ -211,8 +241,11 @@ pub(crate) fn request_peaks(app: &mut FilmcraftApp, item: ItemId, stream: usize)
     let dur = src.info().duration;
     let run = move || {
         let out = source_peaks(&*src, stream, dur);
-        peaks.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, Arc::new(out));
+        // both under the `peaks` lock (taken first, as by the reader): never peaks without their validity
+        let mut cached = peaks.lock().unwrap_or_else(|e| e.into_inner());
+        cached.insert(pkey, Arc::new(out));
         gens.lock().unwrap_or_else(|e| e.into_inner()).insert(pkey, generation);
+        drop(cached);
         pending.lock().unwrap_or_else(|e| e.into_inner()).retain(|i| *i != pkey);
     };
     #[cfg(not(target_arch = "wasm32"))]
@@ -311,7 +344,7 @@ mod tests {
     }
 
     // Relinking a clip to another file (Link Media, forced) shows the new file's waveform, not the
-    // one read from the old file.
+    // one read from the old file; undo and redo follow.
     #[test]
     fn a_relinked_clip_gets_the_new_files_waveform() {
         let root = tmp("relink");
@@ -326,6 +359,48 @@ mod tests {
         app.session.execute("media.relink", json!({"item": item.0, "path": quiet.to_string_lossy(), "force": true})).unwrap();
         let l = settles(&mut app, item, |l| l < 0.2);
         assert!(l > 0.05, "the quiet file's waveform, not silence: {l}");
+        app.session.execute("edit.undo", json!({})).unwrap();
+        assert!(settles(&mut app, item, |l| l > 0.3) > 0.3, "undo: the loud file's again");
+        app.session.execute("edit.redo", json!({})).unwrap();
+        assert!(settles(&mut app, item, |l| l < 0.2) > 0.05, "redo: the quiet file's again");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // A nested sequence's mix depends on its own files only: attaching a file it does not use
+    // keeps its peaks (no mix again); its own file coming back mixes it again.
+    #[test]
+    fn a_nested_mix_follows_its_own_files_only() {
+        let root = tmp("nested");
+        std::fs::create_dir_all(root.join("Media")).unwrap();
+        let (x, y) = (root.join("Media").join("x.wav"), root.join("Media").join("y.wav"));
+        std::fs::write(&x, tone_wav(12_000.0)).unwrap();
+        std::fs::write(&y, tone_wav(6_000.0)).unwrap();
+        let (x_path, y_path) = (x.to_string_lossy().into_owned(), y.to_string_lossy().into_owned());
+        let mut s = Session::default();
+        let r = s.execute("file.import", json!({"paths": [x_path, y_path]})).unwrap();
+        let x_item = ItemId(r["items"][0].as_u64().unwrap());
+        let seq = ItemId(s.execute("file.newSequence", json!({"name": "X only", "fromItem": x_item.0})).unwrap()["sequence"].as_u64().unwrap());
+        let path = root.join("p.fcproj").to_string_lossy().into_owned();
+        s.execute("file.save", json!({"path": path})).unwrap();
+        std::fs::rename(root.join("Media"), root.join("Stash")).unwrap();
+
+        let mut app = FilmcraftApp::new(Session::default());
+        app.open_project_quietly(&path).unwrap();
+        assert!(settles(&mut app, seq, |_| true) < 1e-4, "X missing: silence");
+        let before = request_peaks(&mut app, seq, 0).unwrap();
+
+        std::fs::create_dir_all(root.join("Media")).unwrap();
+        std::fs::rename(root.join("Stash").join("y.wav"), &y).unwrap();
+        assert_eq!(filmcraft_engine::relink::attach(&mut app.session, std::slice::from_ref(&y_path)).len(), 1);
+        for _ in 0..20 {
+            let now = request_peaks(&mut app, seq, 0).unwrap();
+            assert!(Arc::ptr_eq(&now, &before), "Y is not in the sequence: no mix again");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        std::fs::rename(root.join("Stash").join("x.wav"), &x).unwrap();
+        assert_eq!(filmcraft_engine::relink::attach(&mut app.session, &[x_path]).len(), 1);
+        settles(&mut app, seq, |l| l > 0.3);
         let _ = std::fs::remove_dir_all(&root);
     }
 }
