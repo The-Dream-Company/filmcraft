@@ -42,7 +42,9 @@
     // A Rust panic (or an out-of-memory abort) inside a frame stops the app for good: eframe logs
     // "panicked at …" with console.error, then the wasm traps ("RuntimeError: unreachable") and
     // the canvas freezes or goes blank. Show what happened instead of a dead page.
-    window.filmcraftLoad = {};
+    // `can`: what this build's `window.filmcraft` offers beyond the original API, so a host can
+    // tell builds apart before calling (`attachFiles`; `quietOpen`: `openProject(file, {quiet: true})`).
+    window.filmcraftLoad = { can: ["attachFiles", "quietOpen"] };
     let lastPanic = null;
     const consoleError = console.error.bind(console);
     console.error = (...a) => {

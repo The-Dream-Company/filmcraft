@@ -99,6 +99,33 @@ pub fn register_blob(name: &str, blob: web_sys::Blob) -> String {
     })
 }
 
+/// Register a browser `File` at exactly `/files/<name>` (`attachFiles`: the path a project names).
+/// A path already registered keeps its file (the new one is not used; readers of the old one stay
+/// valid). A name with a path separator is refused rather than mapped onto another file's path.
+/// Returns the path and whether this file was registered there.
+pub fn attach_blob(name: &str, blob: web_sys::Blob) -> Result<(String, bool), String> {
+    if name.is_empty() {
+        return Err("a file without a name can't be attached".into());
+    }
+    if name.contains(['/', '\\']) {
+        return Err(format!("{name}: a file name with a path separator can't be attached"));
+    }
+    let size = blob.size() as u64;
+    let path = format!("/files/{name}");
+    let added = FS.with(|fs| {
+        let mut fs = fs.borrow_mut();
+        if fs.entries.contains_key(&path) {
+            return false;
+        }
+        let id = fs.next_id;
+        fs.next_id += 1;
+        fs.blobs.insert(id, blob);
+        fs.entries.insert(path.clone(), Entry::Blob { id, size });
+        true
+    });
+    Ok((path, added))
+}
+
 /// Put bytes at a path (no download).
 pub fn put(path: &str, data: Vec<u8>) {
     FS.with(|fs| fs.borrow_mut().entries.insert(path.to_string(), Entry::Mem(data.into())));

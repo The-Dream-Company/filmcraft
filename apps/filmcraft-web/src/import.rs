@@ -132,12 +132,50 @@ pub async fn import_files(files: Vec<web_sys::File>) -> Value {
     json!({"items": items, "errors": errors, "paths": paths})
 }
 
-/// Open a `.fcproj` file picked or dropped by the user.
-pub async fn open_project_file(file: web_sys::File) -> Result<Value, String> {
+/// Hand over the media of the open project (the host opened it first): each file is registered at
+/// `/files/<name>` and the project's items naming that path come online. Nothing is imported or
+/// probed here (the first frame that needs a file opens it), but its bytes are prefetched as an
+/// import prefetches them: no bin item, no undo step. A path
+/// already registered keeps its file. Returns `{paths, errors, online}` (`online`: the item ids
+/// that came online).
+pub async fn attach_files(files: Vec<web_sys::File>) -> Value {
+    let mut errors = Vec::new();
+    let mut paths = Vec::new();
+    let mut new_paths = Vec::new();
+    for f in files {
+        match fs::attach_blob(&f.name(), f.clone().into()) {
+            Ok((path, added)) => {
+                // a path already registered keeps its file, and its recovery copy
+                if added {
+                    crate::recovery::keep_media(&path, &f);
+                    // as an import does: what the first frames and the waveform read is cached
+                    // before the items come online (a read that has to wait cuts a waveform short)
+                    prewarm(&path, f.size() as u64).await;
+                    new_paths.push(path.clone());
+                }
+                paths.push(path);
+            }
+            Err(e) => errors.push(json!(e)),
+        }
+    }
+    let online = on_ui(move |w, _| filmcraft_engine::relink::attach(&mut w.app.session, &new_paths)).await;
+    json!({"paths": paths, "errors": errors, "online": online.iter().map(|i| i.0).collect::<Vec<_>>()})
+}
+
+/// Open a `.fcproj` file picked or dropped by the user. `quiet`: missing media neither opens Link
+/// Media nor toasts (a host that hands the media over afterwards with [`attach_files`]).
+pub async fn open_project_file(file: web_sys::File, quiet: bool) -> Result<Value, String> {
     let buf = JsFuture::from(file.array_buffer()).await.map_err(|e| format!("{e:?}"))?;
     let path = format!("/projects/{}", file.name());
     fs::put(&path, js_sys::Uint8Array::new(&buf).to_vec());
-    on_ui(move |w, _| w.app.session.execute("file.open", json!({"path": path})).map_err(|e| e.to_string())).await
+    on_ui(move |w, _| {
+        if quiet {
+            w.app.open_project_quietly(&path).map_err(|e| e.to_string())
+        } else {
+            w.app.session.execute("file.open", json!({"path": path})).map_err(|e| e.to_string())
+        }
+    })
+    .await
 }
 
 /// Handle files from a picker or a drop: projects open, everything else is imported.
@@ -145,7 +183,7 @@ pub fn take_files(files: Vec<web_sys::File>) {
     wasm_bindgen_futures::spawn_local(async move {
         let (projects, media): (Vec<_>, Vec<_>) = files.into_iter().partition(|f| f.name().to_ascii_lowercase().ends_with(".fcproj"));
         for p in projects {
-            if let Err(e) = open_project_file(p).await {
+            if let Err(e) = open_project_file(p, false).await {
                 crate::post(move |w, _| w.app.status(e));
             }
         }

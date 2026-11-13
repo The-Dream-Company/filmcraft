@@ -484,3 +484,256 @@ fn offline_all_is_saved_and_reopening_does_not_ask_again() {
     assert!(open(&path).offline.prompt, "newly missing media asks again");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// `<root>/Project/p.fcproj` using `<root>/Media/{a,b,c}.mov`, then the media folder moved to
+/// `<root>/Stash`: the project opens with three missing items.
+fn three_missing(root: &std::path::Path) -> (String, Vec<ItemId>, Vec<String>) {
+    let media = root.join("Media");
+    std::fs::create_dir_all(&media).unwrap();
+    let files = [media.join("a.mov"), media.join("b.mov"), media.join("c.mov")];
+    for (f, scene) in files.iter().zip([DemoScene::Aurora, DemoScene::CityNight, DemoScene::Dunes]) {
+        make_movie(f, scene, W, H, 12);
+    }
+    let (mut s, items, _) = session_with(&[&files[0], &files[1], &files[2]]);
+    let proj = root.join("Project");
+    std::fs::create_dir_all(&proj).unwrap();
+    let path = proj.join("p.fcproj").to_string_lossy().into_owned();
+    s.execute("file.save", json!({"path": path})).unwrap();
+    drop(s);
+    std::fs::rename(&media, root.join("Stash")).unwrap();
+    (path, items, files.iter().map(|f| f.to_string_lossy().into_owned()).collect())
+}
+
+/// What a host does after `attachFiles`: put the file back at the path the project names.
+fn put_back(root: &std::path::Path, name: &str) {
+    std::fs::create_dir_all(root.join("Media")).unwrap();
+    std::fs::rename(root.join("Stash").join(name), root.join("Media").join(name)).unwrap();
+}
+
+fn status(s: &mut Session) -> Vec<String> {
+    s.execute("media.status", json!({})).unwrap().as_array().unwrap().iter().map(|m| m["status"].as_str().unwrap().to_string()).collect()
+}
+
+// T3 (Filmsquare): open first, hand the media over afterwards. A file put at the path an item
+// names brings that item online without an import: no bin item, no undo step.
+#[test]
+fn attach_brings_items_online_by_path_without_an_edit() {
+    let root = tmp_dir("relink-attach");
+    let (path, items, files) = three_missing(&root);
+    let mut s = open(&path);
+    assert_eq!(s.offline.missing.len(), 3);
+    // the monitors drew the slate before the media arrived
+    let (w, h, px) = frame_rgba(&mut s, 3, 1.0);
+    assert!(psnr(&px, &slate_rgba8(w, h, "a.mov", OfflineReason::Missing)) > 40.0);
+    // an edit before the media arrives, and where the user is
+    s.edit("Rename c", |p, _| {
+        p.item_mut(items[2]).unwrap().name = "c renamed".into();
+        Ok(())
+    })
+    .unwrap();
+    s.state.project_selection = vec![items[1]];
+    let playhead = s.playhead();
+    let (undo, item_count, dirty) = (s.history.undo.len(), s.project.items.len(), s.is_dirty());
+
+    put_back(&root, "a.mov");
+    put_back(&root, "b.mov");
+    let back = crate::relink::attach(&mut s, &files[..2]);
+    assert_eq!(s.playhead(), playhead, "attach leaves the playhead");
+    assert_eq!(back, vec![items[0], items[1]]);
+    assert_eq!(status(&mut s), ["online", "online", "missing"]);
+    assert_eq!(s.offline.missing, vec![items[2]]);
+    assert_eq!([0, 1, 2].map(|i| s.media.reopened(items[i])), [1, 1, 0], "frame caches of the items that came back go");
+    assert!(psnr(&frame_rgba(&mut s, 3, 1.0).2, &slate_rgba8(w, h, "a.mov", OfflineReason::Missing)) < 20.0, "a renders its file now");
+    let (_, _, c) = frame_rgba(&mut s, 27, 1.0);
+    assert!(psnr(&c, &slate_rgba8(w, h, "c.mov", OfflineReason::Missing)) > 40.0, "c is still missing");
+    // nothing imported, nothing edited, nothing moved
+    assert_eq!(s.history.undo.len(), undo, "attach adds no undo step");
+    assert_eq!(s.project.items.len(), item_count, "attach adds no bin item");
+    assert_eq!(s.is_dirty(), dirty);
+    assert_eq!(s.state.project_selection, vec![items[1]]);
+
+    // undo takes back the edit made before attach, not the media
+    s.execute("edit.undo", json!({})).unwrap();
+    assert_eq!(s.project.item(items[2]).unwrap().name, "c.mov");
+    assert_eq!(status(&mut s), ["online", "online", "missing"]);
+
+    // a file that matches no item is only there: no bin item, nothing comes online
+    let stray = root.join("Stash").join("stray.mov");
+    make_movie(&stray, DemoScene::Aurora, W, H, 4);
+    let rev = s.revision;
+    assert!(crate::relink::attach(&mut s, &[stray.to_string_lossy().into_owned()]).is_empty());
+    assert_eq!(s.project.items.len(), item_count);
+    assert_eq!(s.revision, rev, "nothing to redraw");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+// The hub marks media offline on purpose in the document: attaching a file at its path leaves it
+// offline (relinking clears that mark, attaching does not).
+#[test]
+fn attach_leaves_items_made_offline_offline() {
+    let root = tmp_dir("relink-attach-offline");
+    let (path, items, files) = three_missing(&root);
+    let mut s = open(&path);
+    s.edit("offline a", |p, _| {
+        p.item_mut(items[0]).unwrap().as_media_mut().unwrap().offline = true;
+        Ok(())
+    })
+    .unwrap();
+    crate::relink::refresh(&mut s);
+    put_back(&root, "a.mov");
+    assert!(crate::relink::attach(&mut s, &files[..1]).is_empty());
+    assert_eq!(status(&mut s)[0], "offline");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+// What the host relies on: attaching to a clean project leaves the saved document (`file.saveCopy`,
+// open sequences and timeline views included) byte for byte as it was, the playhead where it was,
+// the project unmodified and the history as it was.
+#[test]
+fn attach_to_a_clean_project_changes_no_document_byte() {
+    let root = tmp_dir("relink-attach-clean");
+    let (path, items, files) = three_missing(&root);
+    let mut s = open(&path);
+    assert!(!s.is_dirty(), "setup: a clean project");
+    s.set_playhead(s.sequence_rate().tick_of(5));
+    let copy = root.join("copy.fcproj").to_string_lossy().into_owned();
+    let save = |s: &mut Session| {
+        s.execute("file.saveCopy", json!({"path": copy})).unwrap();
+        std::fs::read(&copy).unwrap()
+    };
+    let doc = save(&mut s);
+    assert!(String::from_utf8_lossy(&doc).contains("\"view\""), "setup: the copy holds the view");
+    let (undo, playhead, open_sequences) = (s.history.undo.len(), s.playhead(), s.state.open_sequences.clone());
+    put_back(&root, "a.mov");
+    put_back(&root, "b.mov");
+    assert_eq!(crate::relink::attach(&mut s, &files), vec![items[0], items[1]]);
+    assert_eq!(save(&mut s), doc, "the saved document is untouched, view included");
+    assert_eq!(s.playhead(), playhead);
+    assert_eq!(s.state.open_sequences, open_sequences);
+    assert!(!s.is_dirty(), "attach does not mark the project modified");
+    assert_eq!(s.history.undo.len(), undo);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+// Proxies on, the original and its proxy both missing: attaching only the proxy file brings no item
+// online (the original is still missing), but the frames drawn offline must go, so the monitors
+// redraw from the proxy at the same playhead. Attaching nothing new changes nothing.
+#[test]
+fn attaching_only_the_proxy_redraws_from_it() {
+    let root = tmp_dir("relink-attach-proxy");
+    let media = root.join("Media");
+    std::fs::create_dir_all(&media).unwrap();
+    let (a, px) = (media.join("a.mov"), media.join("a_proxy.mov"));
+    make_movie(&a, DemoScene::Aurora, W, H, 12);
+    make_movie(&px, DemoScene::Dunes, W, H, 12);
+    let px_path = px.to_string_lossy().into_owned();
+    let (mut s, items, _) = session_with(&[&a]);
+    let (proxy, item) = (px_path.clone(), items[0]);
+    s.edit("proxy", move |p, _| {
+        p.item_mut(item).unwrap().as_media_mut().unwrap().proxy = Some(filmcraft_project::MediaRef::File { path: proxy });
+        Ok(())
+    })
+    .unwrap();
+    std::fs::create_dir_all(root.join("Project")).unwrap();
+    let path = root.join("Project").join("p.fcproj").to_string_lossy().into_owned();
+    s.execute("file.save", json!({"path": path})).unwrap();
+    s.media.set_use_proxies(true);
+    let proxy_picture = frame_rgba(&mut s, 3, 1.0).2;
+    drop(s);
+    std::fs::rename(&media, root.join("Stash")).unwrap();
+
+    let mut s = open(&path);
+    s.media.set_use_proxies(true);
+    let (w, h, px0) = frame_rgba(&mut s, 3, 1.0);
+    assert!(psnr(&px0, &slate_rgba8(w, h, "a.mov", OfflineReason::Missing)) > 40.0, "setup: the slate");
+    let (rev, playhead) = (s.revision, s.playhead());
+    put_back(&root, "a_proxy.mov");
+    assert!(crate::relink::attach(&mut s, std::slice::from_ref(&px_path)).is_empty(), "the original is still missing");
+    assert_eq!(s.media.reopened(items[0]), 1, "frame caches of the item go");
+    assert!(s.revision > rev, "the monitors redraw");
+    assert_eq!(s.playhead(), playhead);
+    let img = s.render_program(1.0).unwrap();
+    assert_eq!(img.over_black_rgba8(), proxy_picture, "the frame at the same playhead comes from the proxy");
+    // the same file again (the page passes no new path): nothing to redraw
+    let rev = s.revision;
+    assert!(crate::relink::attach(&mut s, &[]).is_empty());
+    assert_eq!((s.revision, s.media.reopened(items[0])), (rev, 1));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+fn missing_toasts(s: &Session) -> usize {
+    s.events.iter().filter(|e| matches!(e, crate::Event::Toast { message, .. } if message.contains("media file(s) are missing"))).count()
+}
+
+// A quiet open asks nothing: no Link Media prompt and no "media file(s) are missing" toast. A
+// normal open still does both, and a quiet open that fails leaves the open project as it was.
+#[test]
+fn quiet_open_neither_prompts_nor_toasts_and_a_failed_one_changes_nothing() {
+    let root = tmp_dir("relink-quiet-open");
+    let (path, _, _) = three_missing(&root);
+    let s = open(&path);
+    assert!(s.offline.prompt);
+    assert_eq!(missing_toasts(&s), 1, "a normal open asks");
+
+    let mut s = Session::default();
+    let r = crate::relink::open_quietly(&mut s, &path).unwrap();
+    assert_eq!(r["missingMedia"], json!(3), "{r}");
+    assert!(!s.offline.prompt, "no Link Media");
+    assert_eq!(missing_toasts(&s), 0, "no missing-media toast");
+    assert_eq!(s.offline.missing.len(), 3, "File ▸ Link Media… still lists them");
+    assert!(!s.offline.quiet, "only that open was quiet");
+
+    // a normal open later asks again
+    s.execute("file.open", json!({"path": path})).unwrap();
+    assert!(s.offline.prompt);
+
+    // failing: nothing changes
+    let (project, prompt, rev) = (s.project.clone(), s.offline.prompt, s.revision);
+    let bad = root.join("nope.fcproj").to_string_lossy().into_owned();
+    assert!(crate::relink::open_quietly(&mut s, &bad).is_err());
+    assert!(std::sync::Arc::ptr_eq(&s.project, &project));
+    assert_eq!((s.offline.prompt, s.revision, s.offline.quiet), (prompt, rev, false));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+// Two overlapping attaches of one name (the page): the first registers the file and is still
+// fetching its bytes, the second finds it registered, passes no new path, and its refresh brings
+// the item online early. When the first one finishes, the item must still redraw from the file.
+#[test]
+fn attach_reopens_an_item_an_earlier_refresh_already_brought_online() {
+    let root = tmp_dir("relink-attach-early");
+    let (path, items, files) = three_missing(&root);
+    let mut s = open(&path);
+    put_back(&root, "a.mov");
+    assert!(crate::relink::attach(&mut s, &[]).contains(&items[0]), "setup: online by the second call's refresh");
+    let reopened = s.media.reopened(items[0]);
+    assert!(crate::relink::attach(&mut s, &files[..1]).is_empty(), "nothing comes online in this call");
+    assert_eq!(s.media.reopened(items[0]), reopened + 1, "but it redraws from the file");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+// An item made offline on purpose stays as it is when its proxy file is attached: no reopen, so
+// what it still shows (its waveform) is kept.
+#[test]
+fn attaching_the_proxy_of_an_item_made_offline_leaves_it() {
+    let root = tmp_dir("relink-attach-offline-proxy");
+    let (path, items, _) = three_missing(&root);
+    let mut s = open(&path);
+    let proxy = root.join("Stash").join("a_proxy.mov");
+    make_movie(&proxy, DemoScene::Dunes, W, H, 12);
+    let proxy_path = proxy.to_string_lossy().into_owned();
+    let pp = proxy_path.clone();
+    let item = items[0];
+    s.edit("offline a, with a proxy", move |p, _| {
+        let m = p.item_mut(item).unwrap().as_media_mut().unwrap();
+        m.offline = true;
+        m.proxy = Some(filmcraft_project::MediaRef::File { path: pp });
+        Ok(())
+    })
+    .unwrap();
+    let (reopened, rev) = (s.media.reopened(items[0]), s.revision);
+    assert!(crate::relink::attach(&mut s, &[proxy_path]).is_empty());
+    assert_eq!(s.media.reopened(items[0]), reopened, "made offline on purpose: not reopened");
+    assert_eq!(s.revision, rev, "nothing to redraw");
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -195,6 +195,15 @@ impl FilmcraftApp {
     pub fn status(&mut self, s: impl Into<String>) {
         self.ui.status = s.into();
     }
+
+    /// Open a project for a host that hands the media over afterwards
+    /// ([`filmcraft_engine::relink::open_quietly`]): no Link Media, and one still open from an
+    /// earlier open closes. A failed open changes nothing.
+    pub fn open_project_quietly(&mut self, path: &str) -> filmcraft_engine::Result<serde_json::Value> {
+        let r = filmcraft_engine::relink::open_quietly(&mut self.session, path)?;
+        self.ui.link_media = None;
+        Ok(r)
+    }
 }
 
 impl FilmcraftApp {
